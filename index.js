@@ -6,6 +6,39 @@ const path = require('path');
 
 const app = express();
 
+// Root docs endpoint
+app.get('/', (req, res) => {
+  res.json({
+    message: 'Anime API Endpoints',
+    version: '1.0',
+    status: 'active',
+    endpoints: [
+      {
+        name: 'AniList TV Episode',
+        method: 'GET',
+        url: '/anime/api/{anilist}/{season}/{episode}',
+        example: '/api/anime/20/1/21',
+        description: 'Get specific TV episode from AniList',
+        parameters: { anilist: 'AniList ID', season: 'Season number', episode: 'Episode number' }
+      },
+      {
+        name: 'Random Anime',
+        method: 'GET',
+        url: '/api/anime/random',
+        example: '/api/anime/random',
+        description: 'Returns a random anime entry (anilistId, slug, title) for testing'
+      },
+      {
+        name: 'Cartoons',
+        method: 'GET',
+        url: '/cartoons',
+        example: '/cartoons',
+        description: 'List cartoons with assigned custom IDs (after merge)'
+      }
+    ]
+  });
+});
+
 // ensure data directory
 const DATA_DIR = path.join(__dirname, 'data');
 try { if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR); } catch(e) {}

@@ -547,7 +547,6 @@ const errorHtmlTemplate = (title, message, type) => `
         <div class="error-icon pulse">${type === 'anime' ? '🎬' : '📺'}</div>
         <h1 class="error-title">${title}</h1>
         <p class="error-message">${message}</p>
-        <a href="/" class="home-button">Back to Home</a>
     </div>
 </body>
 </html>
@@ -1086,3 +1085,4 @@ app.listen(PORT, () => {
     console.log(`   GET /api/search?query=name`);
     console.log(`   GET /health`);
 });
+

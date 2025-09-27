@@ -751,23 +751,45 @@ app.get('/api/anime/:anilistId/:season/:episodeNum', async (req, res) => {
             });
         }
 
-        if (embedServers.length === 0) {
-            return res.status(404).json({ error: 'No video sources found for this episode' });
-        }
+    if (embedServers.length === 0) {
+      return res.status(404).json({ error: 'No video sources found for this episode' });
+    }
 
-        res.json({
-            anilist_id: parseInt(anilistId),
-            anime_slug: animeSlug,
-            title: anime.normalizedTitle,
-            season: parseInt(season),
-            episode: parseInt(episodeNum),
-            episode_title: title,
-            description,
-            thumbnail,
-            servers: embedServers,
-            source_url: url,
-            total_servers: embedServers.length
-        });
+    // Pick primary player URL (iframe if available, otherwise first video source)
+    const primaryServer = embedServers[0];
+    const primaryUrl = primaryServer.iframe_url || (primaryServer.video_sources && primaryServer.video_sources[0] && primaryServer.video_sources[0].url) || null;
+
+    const payload = {
+      anilist_id: parseInt(anilistId),
+      anime_slug: animeSlug,
+      title: anime.normalizedTitle,
+      season: parseInt(season),
+      episode: parseInt(episodeNum),
+      episode_title: title,
+      description,
+      thumbnail,
+      player_url: primaryUrl,
+      servers: embedServers,
+      source_url: url,
+      total_servers: embedServers.length
+    };
+
+    // Default: return a clean fullscreen iframe HTML page for the primary player URL.
+    // If the client explicitly asks for JSON (query ?json=1 or Accept: application/json), return JSON instead.
+    const wantJson = req.query.json === '1' || (req.headers.accept && req.headers.accept.includes('application/json'));
+    if (!wantJson && primaryUrl) {
+      const html = `<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${anime.normalizedTitle} - S${season}E${episodeNum}</title>
+<style>html,body{height:100%;margin:0;background:#000}iframe{position:fixed;inset:0;border:0;width:100%;height:100%}</style>
+</head><body>
+<iframe src="${primaryUrl}" allowfullscreen allow="autoplay; fullscreen"></iframe>
+</body></html>`;
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.send(html);
+    }
+
+    return res.json(payload);
 
     } catch (err) {
         console.error('Error fetching episode:', err.message);
@@ -870,7 +892,22 @@ app.get('/api/anime/random', (req, res) => {
   const persisted = loadJsonSafe(ANIME_DB_FILE, null);
   const source = Array.isArray(persisted) ? persisted : (persisted && persisted.items) ? persisted.items : animeDatabase;
   if (!Array.isArray(source) || source.length === 0) return res.status(500).json({ error: 'no anime available' });
-  const idx = Math.floor(Math.random() * source.length);
-  const a = source[idx];
+
+  // exclude entries without a valid aniList id
+  const candidates = source.filter(item => item && item.anilistId != null);
+  if (!Array.isArray(candidates) || candidates.length === 0) return res.status(500).json({ error: 'no anime with anilistId available' });
+
+  const idx = Math.floor(Math.random() * candidates.length);
+  const a = candidates[idx];
   res.json({ anilistId: a.anilistId, slug: a.slug, title: a.normalizedTitle || a.slug });
+});
+
+// Auto-resolve by title. Redirects to the real endpoint with embed when used.
+app.get('/api/anime/auto/:title/:season/:episode', (req, res) => {
+  const raw = req.params.title || '';
+  const title = decodeURIComponent(raw).toLowerCase();
+  // Try to find by normalizedTitle or slug
+  const found = animeDatabase.find(a => ((a.normalizedTitle || '')).toLowerCase() === title || (a.slug || '').toLowerCase() === title);
+  if (!found || !found.anilistId) return res.status(404).json({ error: 'not found' });
+  return res.redirect(`/api/anime/${found.anilistId}/${req.params.season}/${req.params.episode}`);
 });

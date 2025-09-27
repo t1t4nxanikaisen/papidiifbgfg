@@ -80,6 +80,7 @@ const animeDatabase = [
   { slug: "classroom-of-the-elite", anilistId: 98444, normalizedTitle: "classroom-of-the-elite" },
   { slug: "mob-psycho-100", anilistId: 100876, normalizedTitle: "mob-psycho-100" },
   { slug: "teogonia", anilistId: 172293, normalizedTitle: "teogonia" },
+  { slug: "Kimetsu no Yaiba", anilistId: 101922, normalizedTitle: "Kimetsu no Yaiba" },
   { slug: "one-punch-man", anilistId: 21087, normalizedTitle: "onepunch-man" },
   { slug: "the-shiunji-family-children", anilistId: 172295, normalizedTitle: "the-shiunji-family-children" },
   { slug: "the-gorilla-gods-go-to-girl", anilistId: 172297, normalizedTitle: "the-gorilla-gods-goto-girl" },
@@ -911,3 +912,4 @@ app.get('/api/anime/auto/:title/:season/:episode', (req, res) => {
   if (!found || !found.anilistId) return res.status(404).json({ error: 'not found' });
   return res.redirect(`/api/anime/${found.anilistId}/${req.params.season}/${req.params.episode}`);
 });
+

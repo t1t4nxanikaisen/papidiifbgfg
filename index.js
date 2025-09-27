@@ -45,7 +45,7 @@ try { if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR); } catch(e) {}
 const CARTOON_FILE = path.join(DATA_DIR, 'cartoons.json');
 
 // Complete Anime database with Anilist mappings
-const animeDatabase = [
+let animeDatabase = [
   { slug: "ghost-in-the-shell-arise", anilistId: 15887, normalizedTitle: "ghost-in-the-shell-arise" },
   { slug: "shoot-goal-to-the-future", anilistId: 132374, normalizedTitle: "shoot-goal-to-the-future" },
   { slug: "death-note", anilistId: 1535, normalizedTitle: "death-note" },
@@ -371,6 +371,165 @@ function saveJsonSafe(filePath, data) {
   try { fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8'); return true; } catch (e) { console.error('save error', e.message); return false; }
 }
 
+// Load persisted database if exists
+const persistedDb = loadJsonSafe(ANIME_DB_FILE);
+if (persistedDb && Array.isArray(persistedDb)) {
+  animeDatabase = persistedDb;
+  console.log(`📁 Loaded ${animeDatabase.length} anime from persistent storage`);
+}
+
+// Function to add new anime to database
+function addAnimeToDatabase(slug, anilistId, normalizedTitle) {
+  // Check if anime already exists
+  const existingAnime = animeDatabase.find(anime => 
+    anime.slug === slug || anime.anilistId === anilistId
+  );
+  
+  if (!existingAnime) {
+    const newAnime = { slug, anilistId, normalizedTitle };
+    animeDatabase.push(newAnime);
+    
+    // Save to persistent storage
+    saveJsonSafe(ANIME_DB_FILE, animeDatabase);
+    
+    console.log(`✅ Added new anime to database: ${normalizedTitle} (${anilistId})`);
+    return newAnime;
+  }
+  
+  return existingAnime;
+}
+
+// Function to search for anime on AniList and get ID
+async function searchAnimeOnAniList(title) {
+  try {
+    const query = `
+      query ($search: String) {
+        Page {
+          media(search: $search, type: ANIME) {
+            id
+            title {
+              romaji
+              english
+              native
+            }
+            siteUrl
+          }
+        }
+      }
+    `;
+
+    const response = await axios.post('https://graphql.anilist.co', {
+      query,
+      variables: { search: title }
+    }, {
+      headers: { 'Content-Type': 'application/json' },
+      timeout: 10000
+    });
+
+    const media = response.data.data.Page.media[0];
+    if (media) {
+      return {
+        anilistId: media.id,
+        title: media.title.english || media.title.romaji,
+        siteUrl: media.siteUrl
+      };
+    }
+  } catch (error) {
+    console.error('AniList search error:', error.message);
+  }
+  return null;
+}
+
+// Function to generate slug from title
+function generateSlug(title) {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .substring(0, 100); // Limit slug length
+}
+
+// Function to search for anime on streaming sites and auto-discover
+async function autoDiscoverAnime(title, season = 1, episodeNum = 1) {
+  console.log(`🔍 Auto-discovering anime: ${title}`);
+  
+  const slug = generateSlug(title);
+  
+  // Try different URL patterns on streaming sites
+  const urlPatterns = [
+    `https://watchanimeworld.in/episode/${slug}-${season}x${episodeNum}/`,
+    `https://watchanimeworld.in/anime/${slug}/`,
+    `https://toonstream.love/anime/${slug}/season-${season}/episode-${episodeNum}`,
+    `https://toonstream.love/anime/${slug}/`
+  ];
+
+  for (const url of urlPatterns) {
+    try {
+      console.log(`Trying URL: ${url}`);
+      const response = await axios.get(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
+        },
+        timeout: 8000
+      });
+
+      if (response.status === 200) {
+        const $ = cheerio.load(response.data);
+        
+        // Check if page contains anime content
+        const pageTitle = $('title').text().toLowerCase();
+        if (pageTitle.includes('404') || pageTitle.includes('not found')) {
+          continue;
+        }
+
+        console.log(`✅ Found anime at: ${url}`);
+        
+        // Try to get AniList ID from the page
+        let anilistId = null;
+        
+        // Look for AniList IDs in meta tags or scripts
+        $('meta[property="al:web:url"], meta[name="anilist_id"]').each((i, el) => {
+          const content = $(el).attr('content');
+          if (content) {
+            const idMatch = content.match(/anilist\.co\/anime\/(\d+)/) || content.match(/(\d+)/);
+            if (idMatch) {
+              anilistId = parseInt(idMatch[1]);
+            }
+          }
+        });
+
+        // If no AniList ID found, search on AniList
+        if (!anilistId) {
+          const anilistResult = await searchAnimeOnAniList(title);
+          if (anilistResult) {
+            anilistId = anilistResult.anilistId;
+          }
+        }
+
+        // If still no ID, generate a custom one (for cartoons/non-AniList content)
+        if (!anilistId) {
+          anilistId = 1000000 + Math.floor(Math.random() * 9000000);
+          console.log(`🎨 Generated custom ID for: ${title}`);
+        }
+
+        return {
+          slug,
+          anilistId,
+          normalizedTitle: title,
+          discovered: true,
+          source: url
+        };
+      }
+    } catch (error) {
+      // Continue to next URL pattern
+      continue;
+    }
+  }
+
+  return null;
+}
+
 // HTML error templates with gradient text (same as before)
 const errorHtmlTemplate = (title, message, type) => `
 <!DOCTYPE html>
@@ -380,105 +539,19 @@ const errorHtmlTemplate = (title, message, type) => `
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>${title}</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-        }
-        
-        .error-container {
-            background: rgba(255, 255, 255, 0.05);
-            backdrop-filter: blur(10px);
-            border-radius: 20px;
-            padding: 40px;
-            text-align: center;
-            max-width: 500px;
-            width: 100%;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
-        }
-        
-        .error-icon {
-            font-size: 4rem;
-            margin-bottom: 20px;
-        }
-        
-        .error-title {
-            background: linear-gradient(45deg, #ff6b6b, #ffa726, #ff6b6b);
-            background-size: 200% 200%;
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            font-size: 2.5rem;
-            font-weight: 700;
-            margin-bottom: 15px;
-            animation: gradientShift 3s ease infinite;
-        }
-        
-        .error-message {
-            color: #b0b0b0;
-            font-size: 1.1rem;
-            line-height: 1.6;
-            margin-bottom: 30px;
-        }
-        
-        .error-details {
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 10px;
-            padding: 15px;
-            margin: 20px 0;
-            border-left: 4px solid #ff6b6b;
-        }
-        
-        .suggestion {
-            color: #888;
-            font-size: 0.9rem;
-            margin-top: 10px;
-        }
-        
-        .home-button {
-            background: linear-gradient(45deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            padding: 12px 30px;
-            border-radius: 25px;
-            font-size: 1rem;
-            cursor: pointer;
-            transition: transform 0.3s ease;
-            text-decoration: none;
-            display: inline-block;
-        }
-        
-        .home-button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
-        }
-        
-        @keyframes gradientShift {
-            0% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
-        }
-        
-        .pulse {
-            animation: pulse 2s infinite;
-        }
-        
-        @keyframes pulse {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.05); }
-            100% { transform: scale(1); }
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .error-container { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(10px); border-radius: 20px; padding: 40px; text-align: center; max-width: 500px; width: 100%; border: 1px solid rgba(255, 255, 255, 0.1); box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3); }
+        .error-icon { font-size: 4rem; margin-bottom: 20px; }
+        .error-title { background: linear-gradient(45deg, #ff6b6b, #ffa726, #ff6b6b); background-size: 200% 200%; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; font-size: 2.5rem; font-weight: 700; margin-bottom: 15px; animation: gradientShift 3s ease infinite; }
+        .error-message { color: #b0b0b0; font-size: 1.1rem; line-height: 1.6; margin-bottom: 30px; }
+        .error-details { background: rgba(255, 255, 255, 0.1); border-radius: 10px; padding: 15px; margin: 20px 0; border-left: 4px solid #ff6b6b; }
+        .suggestion { color: #888; font-size: 0.9rem; margin-top: 10px; }
+        .home-button { background: linear-gradient(45deg, #667eea 0%, #764ba2 100%); color: white; border: none; padding: 12px 30px; border-radius: 25px; font-size: 1rem; cursor: pointer; transition: transform 0.3s ease; text-decoration: none; display: inline-block; }
+        .home-button:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3); }
+        @keyframes gradientShift { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+        .pulse { animation: pulse 2s infinite; }
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
     </style>
 </head>
 <body>
@@ -486,7 +559,6 @@ const errorHtmlTemplate = (title, message, type) => `
         <div class="error-icon pulse">${type === 'anime' ? '🎬' : '📺'}</div>
         <h1 class="error-title">${title}</h1>
         <p class="error-message">${message}</p>
-        
         ${type === 'anime' ? `
         <div class="error-details">
             <strong>Possible reasons:</strong>
@@ -508,7 +580,6 @@ const errorHtmlTemplate = (title, message, type) => `
         </div>
         <p class="suggestion">Try checking the episode number or wait for the release.</p>
         `}
-        
         <a href="/" class="home-button">Back to Home</a>
     </div>
 </body>
@@ -518,9 +589,7 @@ const errorHtmlTemplate = (title, message, type) => `
 // Function to fetch from toonstream.love
 async function fetchFromToonstream(animeSlug, season, episodeNum) {
     try {
-        // Construct URL for toonstream.love
         const url = `https://toonstream.love/anime/${animeSlug}/season-${season}/episode-${episodeNum}`;
-        
         console.log('Fetching from Toonstream:', url);
         
         const response = await axios.get(url, {
@@ -533,8 +602,6 @@ async function fetchFromToonstream(animeSlug, season, episodeNum) {
         });
 
         const $ = cheerio.load(response.data);
-        
-        // Extract video sources from toonstream.love
         const videoSources = [];
         
         // Look for direct video elements
@@ -567,7 +634,6 @@ async function fetchFromToonstream(animeSlug, season, episodeNum) {
         $('script').each((i, el) => {
             const scriptContent = $(el).html();
             if (scriptContent) {
-                // Look for video URLs in scripts
                 const videoRegex = /(https?:\/\/[^\s"']+\.(mp4|m3u8|webm)[^\s"']*)/gi;
                 const matches = scriptContent.match(videoRegex);
                 if (matches) {
@@ -601,7 +667,7 @@ async function fetchFromToonstream(animeSlug, season, episodeNum) {
     }
 }
 
-// Function to fetch from animeworld (your existing source)
+// Function to fetch from animeworld
 async function fetchFromAnimeWorld(animeSlug, season, episodeNum) {
     try {
         const url = `https://watchanimeworld.in/episode/${animeSlug}-${season}x${episodeNum}/`;
@@ -685,25 +751,39 @@ async function fetchFromAnimeWorld(animeSlug, season, episodeNum) {
     }
 }
 
-// Helper function to find anime by Anilist ID
-function findAnimeByAnilistId(anilistId) {
-    return animeDatabase.find(anime => anime.anilistId === parseInt(anilistId));
-}
-
-// Helper function to find anime by slug
-function findAnimeBySlug(slug) {
-    return animeDatabase.find(anime => anime.slug === slug);
-}
-
-// Main anime endpoint with multiple sources
+// Enhanced main anime endpoint with auto-discovery
 app.get('/api/anime/:anilistId/:season/:episodeNum', async (req, res) => {
     const { anilistId, season, episodeNum } = req.params;
     const wantJson = req.query.json === '1' || (req.headers.accept && req.headers.accept.includes('application/json'));
+    const autoDiscover = req.query.auto !== 'false'; // Enable auto-discovery by default
 
     try {
         // Find anime by Anilist ID
-        const anime = findAnimeByAnilistId(anilistId);
+        let anime = findAnimeByAnilistId(anilistId);
         
+        // If anime not found and auto-discovery is enabled, try to find by title
+        if (!anime && autoDiscover) {
+            console.log(`🔍 Anime not found in database, attempting auto-discovery for ID: ${anilistId}`);
+            
+            // Try to get anime title from AniList API
+            const anilistInfo = await getAnimeInfoFromAniList(anilistId);
+            if (anilistInfo) {
+                console.log(`📝 Found anime on AniList: ${anilistInfo.title}`);
+                
+                // Auto-discover the anime
+                const discoveredAnime = await autoDiscoverAnime(anilistInfo.title, season, episodeNum);
+                if (discoveredAnime) {
+                    // Add to database
+                    anime = addAnimeToDatabase(
+                        discoveredAnime.slug,
+                        parseInt(anilistId),
+                        anilistInfo.title
+                    );
+                    console.log(`✅ Auto-added anime to database: ${anilistInfo.title}`);
+                }
+            }
+        }
+
         if (!anime) {
             if (wantJson) {
                 return res.status(404).json({ 
@@ -766,6 +846,7 @@ app.get('/api/anime/:anilistId/:season/:episodeNum', async (req, res) => {
             season: parseInt(season),
             episode: parseInt(episodeNum),
             source: successfulSource,
+            auto_discovered: anime.discovered || false,
             ...result.data
         };
 
@@ -801,6 +882,105 @@ app.get('/api/anime/:anilistId/:season/:episodeNum', async (req, res) => {
         ));
     }
 });
+
+// New endpoint for direct title-based search and auto-discovery
+app.get('/api/anime/search/:title/:season?/:episode?', async (req, res) => {
+    const { title, season = 1, episode = 1 } = req.params;
+    const decodedTitle = decodeURIComponent(title);
+    
+    console.log(`🔍 Searching for anime: ${decodedTitle}`);
+    
+    try {
+        // First, try to find in existing database
+        let anime = findAnimeByTitle(decodedTitle);
+        
+        if (!anime) {
+            // Auto-discover the anime
+            console.log(`🌐 Auto-discovering: ${decodedTitle}`);
+            const discoveredAnime = await autoDiscoverAnime(decodedTitle, season, episode);
+            
+            if (discoveredAnime) {
+                // Add to database
+                anime = addAnimeToDatabase(
+                    discoveredAnime.slug,
+                    discoveredAnime.anilistId,
+                    decodedTitle
+                );
+                console.log(`✅ Auto-added to database: ${decodedTitle}`);
+            }
+        }
+
+        if (anime) {
+            // Redirect to the standard anime endpoint
+            return res.redirect(`/api/anime/${anime.anilistId}/${season}/${episode}?auto=true`);
+        } else {
+            return res.status(404).json({
+                error: 'Anime not found',
+                message: `Could not find "${decodedTitle}" on any streaming sites`,
+                suggestion: 'Try checking the spelling or use the exact title'
+            });
+        }
+    } catch (error) {
+        console.error('Search error:', error.message);
+        return res.status(500).json({
+            error: 'Search failed',
+            details: error.message
+        });
+    }
+});
+
+// Helper function to get anime info from AniList
+async function getAnimeInfoFromAniList(anilistId) {
+    try {
+        const query = `
+            query ($id: Int) {
+                Media(id: $id) {
+                    id
+                    title {
+                        romaji
+                        english
+                        native
+                    }
+                    siteUrl
+                }
+            }
+        `;
+
+        const response = await axios.post('https://graphql.anilist.co', {
+            query,
+            variables: { id: parseInt(anilistId) }
+        }, {
+            headers: { 'Content-Type': 'application/json' },
+            timeout: 10000
+        });
+
+        const media = response.data.data.Media;
+        if (media) {
+            return {
+                anilistId: media.id,
+                title: media.title.english || media.title.romaji,
+                siteUrl: media.siteUrl
+            };
+        }
+    } catch (error) {
+        console.error('AniList info fetch error:', error.message);
+    }
+    return null;
+}
+
+// Helper function to find anime by title
+function findAnimeByTitle(title) {
+    const searchTerm = title.toLowerCase();
+    return animeDatabase.find(anime => 
+        anime.normalizedTitle.toLowerCase().includes(searchTerm) ||
+        anime.slug.toLowerCase().includes(searchTerm)
+    );
+}
+
+// Helper function to find anime by Anilist ID
+function findAnimeByAnilistId(anilistId) {
+    return animeDatabase.find(anime => anime.anilistId === parseInt(anilistId));
+}
 
 // Your existing extractor functions remain the same...
 async function extractVideoUrls(iframeUrl) {
@@ -1069,7 +1249,8 @@ app.listen(PORT, () => {
     console.log(`🔥 Anime API server running on port ${PORT}`);
     console.log(`📺 Total anime in database: ${animeDatabase.length}`);
     console.log(`🚀 Endpoints:`);
-    console.log(`   GET /api/anime/:anilistId/:season/:episodeNum`);
+    console.log(`   GET /api/anime/:anilistId/:season/:episodeNum (with auto-discovery)`);
+    console.log(`   GET /api/anime/search/:title/:season?/:episode? (direct search)`);
     console.log(`   GET /api/extract?url=EMBED_URL`);
     console.log(`   GET /api/search?query=name`);
     console.log(`   GET /health`);

@@ -6,6 +6,16 @@ const path = require('path');
 
 const app = express();
 
+// Middleware for JSON parsing and timeout handling
+app.use(express.json());
+app.use((req, res, next) => {
+  res.setTimeout(10000, () => {
+    console.error('Request timed out:', req.url);
+    res.status(504).json({ error: 'Request timed out' });
+  });
+  next();
+});
+
 // Root docs endpoint
 app.get('/', (req, res) => {
   res.json({
@@ -16,7 +26,7 @@ app.get('/', (req, res) => {
       {
         name: 'AniList TV Episode',
         method: 'GET',
-        url: '/anime/api/{anilist}/{season}/{episode}',
+        url: '/api/anime/{anilist}/{season}/{episode}',
         example: '/api/anime/20/1/21',
         description: 'Get specific TV episode from AniList',
         parameters: { anilist: 'AniList ID', season: 'Season number', episode: 'Episode number' }
@@ -34,17 +44,39 @@ app.get('/', (req, res) => {
         url: '/cartoons',
         example: '/cartoons',
         description: 'List cartoons with assigned custom IDs (after merge)'
+      },
+      {
+        name: 'Merge Crawled Data',
+        method: 'GET',
+        url: '/admin/merge-crawled?token=AUTH_TOKEN',
+        example: '/admin/merge-crawled?token=letmein',
+        description: 'Merge crawled anime and cartoon lists into the database (admin only)'
+      },
+      {
+        name: 'Search Anime',
+        method: 'GET',
+        url: '/api/search?query={term}',
+        example: '/api/search?query=naruto',
+        description: 'Search anime by title or slug'
+      },
+      {
+        name: 'Extract Video URL',
+        method: 'GET',
+        url: '/api/extract?url={video_url}',
+        example: '/api/extract?url=https://zephyrflick.top/embed/123',
+        description: 'Extract direct video URLs from an embed URL'
       }
     ]
   });
 });
 
-// ensure data directory
+// Ensure data directory
 const DATA_DIR = path.join(__dirname, 'data');
-try { if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR); } catch(e) {}
+try { if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR); } catch (e) {}
 const CARTOON_FILE = path.join(DATA_DIR, 'cartoons.json');
+const ANIME_DB_FILE = path.join(DATA_DIR, 'anime_db.json');
 
-// Anime database with Anilist mappings
+// Anime database with Anilist mappings (same as provided)
 const animeDatabase = [
   { slug: "ghost-in-the-shell-arise", anilistId: 15887, normalizedTitle: "ghost-in-the-shell-arise" },
   { slug: "shoot-goal-to-the-future", anilistId: 132374, normalizedTitle: "shoot-goal-to-the-future" },
@@ -360,8 +392,7 @@ const animeDatabase = [
   { slug: "transformers-rescue-bots-academy", anilistId: 172593, normalizedTitle: "transformers-rescue-bots-academy" }
 ];
 
-// Persistence file for the merged anime DB
-const ANIME_DB_FILE = path.join(DATA_DIR, 'anime_db.json');
+];
 
 function loadJsonSafe(filePath, fallback = null) {
   try { return JSON.parse(fs.readFileSync(filePath, 'utf8')); } catch (e) { return fallback; }
@@ -370,9 +401,6 @@ function loadJsonSafe(filePath, fallback = null) {
 function saveJsonSafe(filePath, data) {
   try { fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8'); return true; } catch (e) { console.error('save error', e.message); return false; }
 }
-
-// NOTE: do not cache crawled files at startup; load them when needed so merges work after crawlers run
-
 
 // Merge function: add new anime titles from crawled lists into animeDatabase
 function mergeCrawledIntoDatabase(crawledAnimesParam, crawledCartoonsParam) {
@@ -383,7 +411,6 @@ function mergeCrawledIntoDatabase(crawledAnimesParam, crawledCartoonsParam) {
   const existingIds = new Set(animeDatabase.map(a => a.anilistId));
   let nextCustomId = 3489478;
 
-  // find a safe nextCustomId that doesn't collide
   while (existingIds.has(nextCustomId)) nextCustomId += 1;
 
   let added = 0;
@@ -405,13 +432,9 @@ function mergeCrawledIntoDatabase(crawledAnimesParam, crawledCartoonsParam) {
     return true;
   }
 
-  // Merge animes: try to avoid adding if title already present
   for (const t of crawledAnimes) addTitle(t, false);
-
-  // Merge cartoons: assign custom IDs when no AniList mapping
   for (const t of crawledCartoons) {
     const norm = t.toLowerCase();
-    // If an entry already exists without an ID, assign one
     const existing = animeDatabase.find(a => ((a.normalizedTitle || a.slug) || '').toLowerCase() === norm);
     if (existing) {
       if (!existing.anilistId) {
@@ -424,18 +447,15 @@ function mergeCrawledIntoDatabase(crawledAnimesParam, crawledCartoonsParam) {
     addTitle(t, true);
   }
 
-  // Persist merged DB to file
   saveJsonSafe(ANIME_DB_FILE, animeDatabase);
   return { added, total: animeDatabase.length };
 }
 
-// Admin endpoint to trigger merge (protected via token)
-// Allow GET for convenience; reload crawled files at request time
+// Admin endpoint to trigger merge
 app.get('/admin/merge-crawled', (req, res) => {
   const token = req.query.token || process.env.EXTRACT_AUTH_TOKEN || 'letmein';
   if (token !== (process.env.EXTRACT_AUTH_TOKEN || 'letmein')) return res.status(401).json({ error: 'unauthorized' });
 
-  // reload crawled lists
   const crawledAnimes = loadJsonSafe(path.join(DATA_DIR, 'animes.json'), { total:0, items: [] }).items || [];
   const crawledCartoons = loadJsonSafe(path.join(DATA_DIR, 'cartoons.json'), { total:0, items: [] }).items || [];
 
@@ -443,9 +463,8 @@ app.get('/admin/merge-crawled', (req, res) => {
   res.json({ success: true, result });
 });
 
-// Endpoint to list cartoons (custom IDs + titles)
+// Endpoint to list cartoons
 app.get('/cartoons', (req, res) => {
-  // if persisted anime_db exists, read from it to include merged entries
   const persisted = loadJsonSafe(ANIME_DB_FILE, null);
   const source = Array.isArray(persisted) ? persisted : (persisted && persisted.items) ? persisted.items : animeDatabase;
   const cartoons = source.filter(a => a.anilistId && a.anilistId >= 3489478).map(a => ({ id: a.anilistId, title: a.normalizedTitle || a.slug }));
@@ -462,36 +481,396 @@ function findAnimeBySlug(slug) {
   return animeDatabase.find(anime => anime.slug === slug);
 }
 
-// Function to extract video URLs from various sources
+// HTML error template
+const errorHtmlTemplate = (title, message, type) => `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${title}</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .error-container {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 40px;
+            text-align: center;
+            max-width: 500px;
+            width: 100%;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+        .error-icon { font-size: 4rem; margin-bottom: 20px; }
+        .error-title {
+            background: linear-gradient(45deg, #ff6b6b, #ffa726, #ff6b6b);
+            background-size: 200% 200%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 15px;
+            animation: gradientShift 3s ease infinite;
+        }
+        .error-message { color: #b0b0b0; font-size: 1.1rem; line-height: 1.6; margin-bottom: 30px; }
+        .error-details { background: rgba(255, 255, 255, 0.1); border-radius: 10px; padding: 15px; margin: 20px 0; border-left: 4px solid #ff6b6b; }
+        .suggestion { color: #888; font-size: 0.9rem; margin-top: 10px; }
+        .home-button {
+            background: linear-gradient(45deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 25px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: transform 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .home-button:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3); }
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        .pulse { animation: pulse 2s infinite; }
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
+    </style>
+</head>
+<body>
+    <div class="error-container">
+        <div class="error-icon pulse">${type === 'anime' ? '🎬' : '📺'}</div>
+        <h1 class="error-title">${title}</h1>
+        <p class="error-message">${message}</p>
+        ${type === 'anime' ? `
+        <div class="error-details">
+            <strong>Possible reasons:</strong>
+            <ul style="text-align: left; margin: 10px 0; padding-left: 20px;">
+                <li>The anime might not be available in our database yet</li>
+                <li>There might be a spelling error in the anime title</li>
+                <li>The anime might be under maintenance</li>
+            </ul>
+        </div>
+        <p class="suggestion">Try checking the spelling or browse our available anime collection.</p>
+        ` : `
+        <div class="error-details">
+            <strong>Possible reasons:</strong>
+            <ul style="text-align: left; margin: 10px 0; padding-left: 20px;">
+                <li>The episode might not have been released yet</li>
+                <li>There might be a temporary server issue</li>
+                <li>The episode number might be incorrect</li>
+            </ul>
+        </div>
+        <p class="suggestion">Try checking the episode number or wait for the release.</p>
+        `}
+        <a href="/" class="home-button">Back to Home</a>
+    </div>
+</body>
+</html>
+`;
+
+// Fetch from toonstream.love
+async function fetchFromToonstream(animeSlug, season, episodeNum) {
+  try {
+    const url = `https://toonstream.love/anime/${animeSlug}/season-${season}/episode-${episodeNum}`;
+    console.log('Fetching from Toonstream:', url);
+    const response = await axios.get(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Referer': 'https://toonstream.love/',
+      },
+      timeout: 8000
+    });
+
+    const $ = cheerio.load(response.data);
+    const videoSources = [];
+    $('video source').each((i, el) => {
+      const src = $(el).attr('src');
+      const type = $(el).attr('type');
+      if (src) {
+        videoSources.push({
+          quality: $(el).attr('data-quality') || 'auto',
+          url: src.startsWith('http') ? src : new URL(src, url).href,
+          type: type || 'video/mp4'
+        });
+      }
+    });
+
+    const iframeSources = [];
+    $('iframe').each((i, el) => {
+      const src = $(el).attr('src');
+      if (src) {
+        iframeSources.push({
+          name: `Toonstream Server ${i + 1}`,
+          iframe_url: src,
+          type: 'embed'
+        });
+      }
+    });
+
+    $('script').each((i, el) => {
+      const scriptContent = $(el).html();
+      if (scriptContent) {
+        const videoRegex = /(https?:\/\/[^\s"']+\.(mp4|m3u8|webm)[^\s"']*)/gi;
+        const matches = scriptContent.match(videoRegex);
+        if (matches) {
+          matches.forEach(match => {
+            videoSources.push({
+              quality: 'auto',
+              url: match,
+              type: match.includes('.m3u8') ? 'hls' : 'direct'
+            });
+          });
+        }
+      }
+    });
+
+    return {
+      success: true,
+      data: {
+        title: 'Episode ' + episodeNum,
+        description: '',
+        thumbnail: '',
+        servers: iframeSources.concat(videoSources.map(v => ({ name: 'Direct', video_sources: [v] }))),
+        primary_url: videoSources[0]?.url || iframeSources[0]?.iframe_url
+      },
+      source: 'toonstream'
+    };
+  } catch (error) {
+    console.error('Toonstream fetch error:', error.message);
+    return { success: false, error: error.message, source: 'toonstream' };
+  }
+}
+
+// Fetch from animeworld
+async function fetchFromAnimeWorld(animeSlug, season, episodeNum) {
+  try {
+    const url = `https://watchanimeworld.in/episode/${animeSlug}-${season}x${episodeNum}/`;
+    const response = await axios.get(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Referer': 'https://watchanimeworld.in/',
+      },
+      timeout: 8000
+    });
+
+    const $ = cheerio.load(response.data);
+    const title = $('h1.entry-title').first().text().trim() || `Episode ${episodeNum}`;
+    const description = $('div.entry-content p').first().text().trim() || '';
+    const thumbnail = $('div.post-thumbnail img').attr('src') || '';
+
+    const embedServers = [];
+    const iframePromises = [];
+
+    $('iframe').each((i, el) => {
+      const src = $(el).attr('src');
+      if (src) {
+        iframePromises.push(
+          extractVideoUrls(src).then(videoSources => {
+            embedServers.push({
+              name: `Server ${i + 1}`,
+              iframe_url: src,
+              video_sources: videoSources,
+              type: detectServerType(src)
+            });
+          }).catch(err => {
+            console.error('Iframe extraction error:', err.message);
+            embedServers.push({
+              name: `Server ${i + 1} (failed)`,
+              iframe_url: src,
+              video_sources: [{ quality: 'fallback', url: src }]
+            });
+          })
+        );
+      }
+    });
+
+    await Promise.allSettled(iframePromises);
+
+    if (embedServers.length === 0) {
+      $('script').each((i, el) => {
+        const scriptContent = $(el).html();
+        if (scriptContent) {
+          const mp4Matches = scriptContent.match(/(https?:\/\/[^\s"']+\.mp4[^\s"']*)/gi);
+          if (mp4Matches) {
+            mp4Matches.forEach((url, index) => {
+              embedServers.push({
+                name: `Direct MP4 ${index + 1}`,
+                iframe_url: url,
+                video_sources: [{ quality: 'direct', url }],
+                type: 'direct'
+              });
+            });
+          }
+        }
+      });
+    }
+
+    return {
+      success: embedServers.length > 0,
+      data: {
+        title,
+        description,
+        thumbnail,
+        servers: embedServers,
+        primary_url: embedServers[0]?.iframe_url || (embedServers[0]?.video_sources && embedServers[0]?.video_sources[0]?.url)
+      },
+      source: 'animeworld'
+    };
+  } catch (error) {
+    console.error('AnimeWorld fetch error:', error.message);
+    return { success: false, error: error.message, source: 'animeworld' };
+  }
+}
+
+// Main anime endpoint
+app.get('/api/anime/:anilistId/:season/:episodeNum', async (req, res) => {
+  const { anilistId, season, episodeNum } = req.params;
+  const wantJson = req.query.json === '1' || (req.headers.accept && req.headers.accept.includes('application/json'));
+
+  try {
+    const anime = findAnimeByAnilistId(anilistId);
+    if (!anime) {
+      if (wantJson) {
+        return res.status(404).json({ error: 'Anime not found in database', message: 'The requested anime is not available' });
+      }
+      return res.send(errorHtmlTemplate('Anime Not Found', 'The anime you are looking for is not available.', 'anime'));
+    }
+
+    const animeSlug = anime.slug;
+    const sources = [
+      () => fetchFromAnimeWorld(animeSlug, season, episodeNum),
+      () => fetchFromToonstream(animeSlug, season, episodeNum)
+    ];
+
+    let result = null;
+    let successfulSource = null;
+
+    for (const sourceFetch of sources) {
+      try {
+        const sourceResult = await sourceFetch();
+        if (sourceResult.success) {
+          result = sourceResult;
+          successfulSource = sourceResult.source;
+          console.log(`✅ Successfully fetched from ${successfulSource}`);
+          break;
+        }
+      } catch (error) {
+        console.error(`Failed from source:`, error.message);
+        continue;
+      }
+    }
+
+    if (!result || !result.success) {
+      if (wantJson) {
+        return res.status(404).json({ error: 'Episode not found', message: 'The requested episode might not be available' });
+      }
+      return res.send(errorHtmlTemplate('Episode Not Available', 'This episode is not available yet.', 'episode'));
+    }
+
+    const payload = {
+      anilist_id: parseInt(anilistId),
+      anime_slug: animeSlug,
+      title: anime.normalizedTitle,
+      season: parseInt(season),
+      episode: parseInt(episodeNum),
+      source: successfulSource,
+      ...result.data
+    };
+
+    if (!payload.primary_url) {
+      if (wantJson) {
+        return res.status(503).json({
+          error: 'No playable sources found',
+          fallback_url: `https://watchanimeworld.in/episode/${animeSlug}-${season}x${episodeNum}/`,
+          message: 'Video may be dynamic; try the original page.'
+        });
+      }
+      return res.send(errorHtmlTemplate('No Sources Available', 'No playable video sources found.', 'episode'));
+    }
+
+    if (!wantJson && payload.primary_url) {
+      const html = `<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${anime.normalizedTitle} - S${season}E${episodeNum}</title>
+<style>html,body{height:100%;margin:0;background:#000}iframe{position:fixed;inset:0;border:0;width:100%;height:100%}</style>
+</head><body>
+<iframe src="${payload.primary_url}" allowfullscreen allow="autoplay; fullscreen"></iframe>
+</body></html>`;
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.send(html);
+    }
+
+    return res.json(payload);
+  } catch (err) {
+    console.error('Error fetching episode:', err.message);
+    if (wantJson) {
+      return res.status(500).json({ error: 'Failed to fetch episode details', details: err.message });
+    }
+    return res.send(errorHtmlTemplate('Server Error', 'An unexpected error occurred.', 'episode'));
+  }
+});
+
+// Extract video URLs
 async function extractVideoUrls(iframeUrl) {
   try {
-    console.log('Extracting from:', iframeUrl);
-    
-    // Handle different video hosting platforms
-    if (iframeUrl.includes('streamtape')) {
-      return await extractStreamtape(iframeUrl);
-    } else if (iframeUrl.includes('dood')) {
-      return await extractDoodstream(iframeUrl);
-    } else if (iframeUrl.includes('filemoon') || iframeUrl.includes('moon')) {
-      return await extractFilemoon(iframeUrl);
-    } else if (iframeUrl.includes('mp4upload')) {
-      return await extractMp4Upload(iframeUrl);
-    } else if (iframeUrl.includes('vidstream')) {
-      return await extractVidstream(iframeUrl);
-    } else {
-      // Try direct iframe content
+    console.log('Extracting video from:', iframeUrl);
+    if (iframeUrl.includes('zephyrflick')) {
       const response = await axios.get(iframeUrl, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
           'Referer': 'https://watchanimeworld.in/',
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
-        }
+        },
+        timeout: 8000
       });
-      
+
       const $ = cheerio.load(response.data);
-      
-      // Look for direct video sources
+      let videoSources = [];
+
+      $('script').each((i, el) => {
+        const content = $(el).html() || '';
+        const hlsMatches = content.match(/(https?:\/\/[^\s"']+\.m3u8[^\s"']*)/gi);
+        if (hlsMatches) hlsMatches.forEach(url => videoSources.push({ quality: 'hls', url }));
+        const mp4Matches = content.match(/(https?:\/\/[^\s"']+\.mp4[^\s"']*)/gi);
+        if (mp4Matches) mp4Matches.forEach(url => videoSources.push({ quality: 'mp4', url }));
+        const jwMatch = content.match(/file["']\s*:\s*["']([^"']+\.(mp4|m3u8))["']/i);
+        if (jwMatch) videoSources.push({ quality: 'jw', url: jwMatch[1] });
+      });
+
+      const dataSrc = $('[data-src], .player-config').attr('data-src') || $('input[name="stream"]').val();
+      if (dataSrc) videoSources.push({ quality: 'data', url: new URL(dataSrc, iframeUrl).href });
+
+      if (videoSources.length === 0) {
+        console.warn('No sources found in Zephyrflick; falling back to iframe.');
+        videoSources.push({ quality: 'zephyr-fallback', url: iframeUrl });
+      }
+
+      return videoSources;
+    } else {
+      const response = await axios.get(iframeUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          'Referer': 'https://watchanimeworld.in/',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+        },
+        timeout: 8000
+      });
+
+      const $ = cheerio.load(response.data);
       const videoSources = [];
+
       $('source').each((i, el) => {
         const src = $(el).attr('src');
         if (src && (src.includes('.mp4') || src.includes('.m3u8'))) {
@@ -501,376 +880,175 @@ async function extractVideoUrls(iframeUrl) {
           });
         }
       });
-      
-      // Look for video URLs in scripts
+
       $('script').each((i, el) => {
         const scriptContent = $(el).html();
         if (scriptContent) {
-          // MP4 patterns
           const mp4Matches = scriptContent.match(/(https?:\/\/[^\s"']+\.mp4[^\s"']*)/gi);
-          if (mp4Matches) {
-            mp4Matches.forEach(url => {
-              videoSources.push({ quality: 'auto', url });
-            });
-          }
-          
-          // M3U8 patterns
+          if (mp4Matches) mp4Matches.forEach(url => videoSources.push({ quality: 'auto', url }));
           const m3u8Matches = scriptContent.match(/(https?:\/\/[^\s"']+\.m3u8[^\s"']*)/gi);
-          if (m3u8Matches) {
-            m3u8Matches.forEach(url => {
-              videoSources.push({ quality: 'hls', url });
-            });
-          }
-          
-          // JW Player patterns
-          if (scriptContent.includes('file:')) {
-            const fileMatch = scriptContent.match(/file:\s*["']([^"']+)["']/);
-            if (fileMatch) {
-              videoSources.push({ quality: 'jwplayer', url: fileMatch[1] });
-            }
-          }
+          if (m3u8Matches) m3u8Matches.forEach(url => videoSources.push({ quality: 'hls', url }));
+          const fileMatch = scriptContent.match(/file:\s*["']([^"']+)["']/);
+          if (fileMatch) videoSources.push({ quality: 'jwplayer', url: fileMatch[1] });
         }
       });
-      
+
       return videoSources.length > 0 ? videoSources : [{ quality: 'direct', url: iframeUrl }];
     }
   } catch (error) {
-    console.error('Error extracting video URLs:', error.message);
-    return [{ quality: 'fallback', url: iframeUrl }];
+    console.error('Extraction error for', iframeUrl, ':', error.message);
+    return [{ quality: 'fallback', url: iframeUrl, error: error.message }];
   }
 }
 
-// Specific extractors for different hosting platforms
+// Specific extractors
 async function extractStreamtape(url) {
   try {
-    const response = await axios.get(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Referer': 'https://watchanimeworld.in/'
-      }
-    });
-    
+    const response = await axios.get(url, { headers: { 'User-Agent': 'Mozilla/5.0', 'Referer': 'https://watchanimeworld.in/' } });
     const $ = cheerio.load(response.data);
     const scriptContent = $('script:contains("ideoo")').html();
-    
     if (scriptContent) {
       const match = scriptContent.match(/document\.getElementById\(['"]?ideoo['"]?\)\.innerHTML\s*=\s*['"]([^'"]+)['"]/);
-      if (match) {
-        const encodedUrl = match[1].replace(/\\/g, '');
-        const videoUrl = `https:${encodedUrl}`;
-        return [{ quality: 'streamtape', url: videoUrl }];
-      }
+      if (match) return [{ quality: 'streamtape', url: `https:${match[1].replace(/\\/g, '')}` }];
     }
-  } catch (error) {
-    console.error('Streamtape extraction error:', error);
-  }
+  } catch (error) { console.error('Streamtape extraction error:', error.message); }
   return [{ quality: 'streamtape', url }];
 }
 
 async function extractDoodstream(url) {
   try {
-    const response = await axios.get(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Referer': 'https://watchanimeworld.in/'
-      }
-    });
-    
+    const response = await axios.get(url, { headers: { 'User-Agent': 'Mozilla/5.0', 'Referer': 'https://watchanimeworld.in/' } });
     const $ = cheerio.load(response.data);
     const scriptContent = $('script:contains("pass_md5")').html();
-    
     if (scriptContent) {
       const passMd5Match = scriptContent.match(/pass_md5\s*=\s*['"]([^'"]+)['"]/);
       const tokenMatch = scriptContent.match(/\?token=([^'"]+)/);
-      
       if (passMd5Match && tokenMatch) {
-        const videoUrl = `https://dood.pm/e/${passMd5Match[1]}${tokenMatch[0]}`;
-        return [{ quality: 'doodstream', url: videoUrl }];
+        return [{ quality: 'doodstream', url: `https://dood.pm/e/${passMd5Match[1]}${tokenMatch[0]}` }];
       }
     }
-  } catch (error) {
-    console.error('Doodstream extraction error:', error);
-  }
+  } catch (error) { console.error('Doodstream extraction error:', error.message); }
   return [{ quality: 'doodstream', url }];
 }
 
 async function extractFilemoon(url) {
   try {
-    const response = await axios.get(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Referer': 'https://watchanimeworld.in/'
-      }
-    });
-    
+    const response = await axios.get(url, { headers: { 'User-Agent': 'Mozilla/5.0', 'Referer': 'https://watchanimeworld.in/' } });
     const $ = cheerio.load(response.data);
     const scriptContent = $('script:contains("sources")').html();
-    
     if (scriptContent) {
       const sourceMatch = scriptContent.match(/sources:\s*\[{\s*file:\s*['"]([^'"]+)['"]/);
-      if (sourceMatch) {
-        return [{ quality: 'filemoon', url: sourceMatch[1] }];
-      }
+      if (sourceMatch) return [{ quality: 'filemoon', url: sourceMatch[1] }];
     }
-  } catch (error) {
-    console.error('Filemoon extraction error:', error);
-  }
+  } catch (error) { console.error('Filemoon extraction error:', error.message); }
   return [{ quality: 'filemoon', url }];
 }
 
 async function extractMp4Upload(url) {
   try {
-    const response = await axios.get(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Referer': 'https://watchanimeworld.in/'
-      }
-    });
-    
+    const response = await axios.get(url, { headers: { 'User-Agent': 'Mozilla/5.0', 'Referer': 'https://watchanimeworld.in/' } });
     const $ = cheerio.load(response.data);
     const scriptContent = $('script:contains("src")').html();
-    
     if (scriptContent) {
       const srcMatch = scriptContent.match(/src:\s*['"]([^'"]+)['"]/);
-      if (srcMatch) {
-        return [{ quality: 'mp4upload', url: srcMatch[1] }];
-      }
+      if (srcMatch) return [{ quality: 'mp4upload', url: srcMatch[1] }];
     }
-  } catch (error) {
-    console.error('Mp4Upload extraction error:', error);
-  }
+  } catch (error) { console.error('Mp4Upload extraction error:', error.message); }
   return [{ quality: 'mp4upload', url }];
 }
 
 async function extractVidstream(url) {
   try {
-    const response = await axios.get(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Referer': 'https://watchanimeworld.in/'
-      }
-    });
-    
+    const response = await axios.get(url, { headers: { 'User-Agent': 'Mozilla/5.0', 'Referer': 'https://watchanimeworld.in/' } });
     const $ = cheerio.load(response.data);
     const scriptContent = $('script:contains("sources")').html();
-    
     if (scriptContent) {
       const sourcesMatch = scriptContent.match(/sources:\s*\[([^\]]+)\]/);
       if (sourcesMatch) {
         const urlMatch = sourcesMatch[1].match(/file:\s*['"]([^'"]+)['"]/);
-        if (urlMatch) {
-          return [{ quality: 'vidstream', url: urlMatch[1] }];
-        }
+        if (urlMatch) return [{ quality: 'vidstream', url: urlMatch[1] }];
       }
     }
-  } catch (error) {
-    console.error('Vidstream extraction error:', error);
-  }
+  } catch (error) { console.error('Vidstream extraction error:', error.message); }
   return [{ quality: 'vidstream', url }];
 }
 
-// -------- Anilist Anime Endpoint --------
-app.get('/api/anime/:anilistId/:season/:episodeNum', async (req, res) => {
-    const { anilistId, season, episodeNum } = req.params;
-
-    try {
-        // Find anime by Anilist ID
-        const anime = findAnimeByAnilistId(anilistId);
-        
-        if (!anime) {
-            return res.status(404).json({ 
-                error: 'Anime not found in database',
-                available_anime: animeDatabase.slice(0, 10).map(a => ({ slug: a.slug, anilistId: a.anilistId, title: a.normalizedTitle }))
-            });
-        }
-
-        const animeSlug = anime.slug;
-
-        // Construct episode URL
-        const url = `https://watchanimeworld.in/episode/${animeSlug}-${season}x${episodeNum}/`;
-
-        const response = await axios.get(url, {
-            headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.5',
-                'Referer': 'https://watchanimeworld.in/',
-                'Connection': 'keep-alive',
-            },
-            timeout: 10000
-        });
-
-        const $ = cheerio.load(response.data);
-
-        // Extract episode details
-        const title = $('h1.entry-title').first().text().trim() || `Episode ${episodeNum}`;
-        const description = $('div.entry-content p').first().text().trim() || '';
-        const thumbnail = $('div.post-thumbnail img').attr('src') || '';
-
-        // Extract embed servers and get REAL video URLs
-        const embedServers = [];
-        const iframePromises = [];
-
-        $('iframe').each((i, el) => {
-            const src = $(el).attr('src');
-            if (src) {
-                iframePromises.push(
-                    extractVideoUrls(src).then(videoSources => {
-                        embedServers.push({
-                            name: `Server ${i + 1}`,
-                            iframe_url: src,
-                            video_sources: videoSources,
-                            type: detectServerType(src)
-                        });
-                    })
-                );
-            }
-        });
-
-        // Wait for all iframe extractions to complete
-        await Promise.all(iframePromises);
-
-        // Alternative: check for direct video sources in the page
-        if (embedServers.length === 0) {
-            $('script').each((i, el) => {
-                const scriptContent = $(el).html();
-                if (scriptContent) {
-                    // Look for direct MP4 links
-                    const mp4Matches = scriptContent.match(/(https?:\/\/[^\s"']+\.mp4[^\s"']*)/gi);
-                    if (mp4Matches) {
-                        mp4Matches.forEach((url, index) => {
-                            embedServers.push({
-                                name: `Direct MP4 ${index + 1}`,
-                                iframe_url: url,
-                                video_sources: [{ quality: 'direct', url }],
-                                type: 'direct'
-                            });
-                        });
-                    }
-                }
-            });
-        }
-
-        if (embedServers.length === 0) {
-            return res.status(404).json({ error: 'No video sources found for this episode' });
-        }
-
-        res.json({
-            anilist_id: parseInt(anilistId),
-            anime_slug: animeSlug,
-            title: anime.normalizedTitle,
-            season: parseInt(season),
-            episode: parseInt(episodeNum),
-            episode_title: title,
-            description,
-            thumbnail,
-            servers: embedServers,
-            source_url: url,
-            total_servers: embedServers.length
-        });
-
-    } catch (err) {
-        console.error('Error fetching episode:', err.message);
-        
-        if (err.response && err.response.status === 404) {
-            return res.status(404).json({ 
-                error: 'Episode not found',
-                message: 'The requested episode might not be available yet'
-            });
-        }
-        
-        res.status(500).json({ 
-            error: 'Failed to fetch episode details',
-            details: err.message 
-        });
-    }
-});
-
 function detectServerType(url) {
-    if (url.includes('streamtape')) return 'streamtape';
-    if (url.includes('dood')) return 'doodstream';
-    if (url.includes('filemoon')) return 'filemoon';
-    if (url.includes('mp4upload')) return 'mp4upload';
-    if (url.includes('vidstream')) return 'vidstream';
-    if (url.includes('.mp4')) return 'direct';
-    if (url.includes('.m3u8')) return 'hls';
-    return 'embed';
+  if (url.includes('streamtape')) return 'streamtape';
+  if (url.includes('dood')) return 'doodstream';
+  if (url.includes('filemoon')) return 'filemoon';
+  if (url.includes('mp4upload')) return 'mp4upload';
+  if (url.includes('vidstream')) return 'vidstream';
+  if (url.includes('zephyrflick')) return 'zephyrflick';
+  if (url.includes('.mp4')) return 'direct';
+  if (url.includes('.m3u8')) return 'hls';
+  return 'embed';
 }
 
-// -------- Search Anime Endpoint --------
+// Search Anime Endpoint
 app.get('/api/search', async (req, res) => {
-    const { query } = req.query;
-    
-    if (!query) {
-        return res.status(400).json({ error: 'Query parameter is required' });
-    }
+  const { query } = req.query;
+  if (!query) return res.status(400).json({ error: 'Query parameter is required' });
 
-    try {
-        const searchTerm = query.toLowerCase();
-        const results = animeDatabase.filter(anime => 
-            anime.slug.toLowerCase().includes(searchTerm) ||
-            anime.normalizedTitle.toLowerCase().includes(searchTerm)
-        ).map(anime => ({
-            slug: anime.slug,
-            anilistId: anime.anilistId,
-            title: anime.normalizedTitle
-        }));
+  try {
+    const searchTerm = query.toLowerCase();
+    const results = animeDatabase.filter(anime => 
+      anime.slug.toLowerCase().includes(searchTerm) ||
+      anime.normalizedTitle.toLowerCase().includes(searchTerm)
+    ).map(anime => ({
+      slug: anime.slug,
+      anilistId: anime.anilistId,
+      title: anime.normalizedTitle
+    }));
 
-        res.json({
-            query,
-            results,
-            total: results.length
-        });
-    } catch (err) {
-        console.error('Search error:', err.message);
-        res.status(500).json({ error: 'Search failed' });
-    }
+    res.json({ query, results, total: results.length });
+  } catch (err) {
+    console.error('Search error:', err.message);
+    res.status(500).json({ error: 'Search failed' });
+  }
 });
 
-// -------- Direct Video URL Extraction Endpoint --------
+// Direct Video URL Extraction Endpoint
 app.get('/api/extract', async (req, res) => {
-    const { url } = req.query;
-    
-    if (!url) {
-        return res.status(400).json({ error: 'URL parameter is required' });
-    }
+  const { url } = req.query;
+  if (!url) return res.status(400).json({ error: 'URL parameter is required' });
 
-    try {
-        const videoSources = await extractVideoUrls(url);
-        res.json({
-            source_url: url,
-            video_sources: videoSources,
-            total_sources: videoSources.length
-        });
-    } catch (err) {
-        console.error('Extraction error:', err.message);
-        res.status(500).json({ error: 'Failed to extract video URLs' });
-    }
+  try {
+    const videoSources = await extractVideoUrls(url);
+    res.json({
+      source_url: url,
+      video_sources: videoSources,
+      total_sources: videoSources.length
+    });
+  } catch (err) {
+    console.error('Extraction error:', err.message);
+    res.status(500).json({ error: 'Failed to extract video URLs', details: err.message });
+  }
 });
 
-// -------- Start Server --------
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`🔥 Anime API server running on port ${PORT}`);
-    console.log(`📺 Total anime in database: ${animeDatabase.length}`);
-    console.log(`🚀 Endpoints:`);
-    console.log(`   GET /api/anime/:anilistId/:season/:episodeNum`);
-    console.log(`   GET /api/extract?url=EMBED_URL`);
-    console.log(`   GET /api/search?query=name`);
-    console.log(`   GET /health`);
-});
-
-// Simple health endpoint
-app.get('/health', (req, res) => {
-  res.json({ ok: true, uptime: process.uptime(), timestamp: Date.now(), animeCount: animeDatabase.length });
-});
-
-// Return a random anime from the merged DB (or in-memory database)
+// Random Anime Endpoint
 app.get('/api/anime/random', (req, res) => {
   const persisted = loadJsonSafe(ANIME_DB_FILE, null);
   const source = Array.isArray(persisted) ? persisted : (persisted && persisted.items) ? persisted.items : animeDatabase;
-  if (!Array.isArray(source) || source.length === 0) return res.status(500).json({ error: 'no anime available' });
+  if (!Array.isArray(source) || source.length === 0) return res.status(500).json({ error: 'No anime available' });
   const idx = Math.floor(Math.random() * source.length);
   const a = source[idx];
   res.json({ anilistId: a.anilistId, slug: a.slug, title: a.normalizedTitle || a.slug });
 });
+
+// Auto-redirect by title
+app.get('/api/anime/auto/:title/:season/:episode', (req, res) => {
+  const raw = req.params.title || '';
+  const title = decodeURIComponent(raw).toLowerCase();
+  const found = animeDatabase.find(a => (a.normalizedTitle || '').toLowerCase() === title || (a.slug || '').toLowerCase() === title);
+  if (!found || !found.anilistId) return res.status(404).json({ error: 'Anime not found' });
+  return res.redirect(`/api/anime/${found.anilistId}/${req.params.season}/${req.params.episode}`);
+});
+
+// Health endpoint
+app.get('/health', (req, res) => {
+  res.json({ ok: true, uptime: process.uptime(), timestamp: Date.now(), animeCount: animeDatabase.length });
+});
+
+// Export for Vercel
+module.exports = app;

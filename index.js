@@ -564,7 +564,7 @@ app.get('/', (req, res) => {
       {
         method: 'GET',
         url: '/admin',
-        description: 'Admin panel (password: 123Admin09)'
+        description: 'Admin panel'
       }
     ]
   });

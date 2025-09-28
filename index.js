@@ -16,32 +16,178 @@ const __dirname = path.dirname(__filename);
 // Enhanced session store with IP tracking and expiration
 let sessions = new Map();
 
-// Dynamic slug database
+// Enhanced anime database with proper URL patterns and seasonxepisode format
 let slugExceptions = {
-  269: { slug: "bleach", name: "Bleach", hasAnilistId: true },
-  41467: { slug: "bleach-thousand-year-blood-war", name: "Bleach: Thousand-Year Blood War", hasAnilistId: true },
-  101922: { slug: "demon-slayer", name: "Demon Slayer", hasAnilistId: true },
-  142329: { slug: "demon-slayer", name: "Demon Slayer Season 2", hasAnilistId: true }, 
-  145139: { slug: "demon-slayer", name: "Demon Slayer Season 3", hasAnilistId: true }, 
-  166240: { slug: "demon-slayer", name: "Demon Slayer Season 4", hasAnilistId: true },
-  20: { slug: "naruto", name: "Naruto", hasAnilistId: true },
-  1735: { slug: "naruto-shippuden", name: "Naruto Shippuden", hasAnilistId: true },
-  21: { slug: "one-piece", name: "One Piece", hasAnilistId: true },
-  16498: { slug: "attack-on-titan", name: "Attack on Titan", hasAnilistId: true },
-  25777: { slug: "attack-on-titan", name: "Attack on Titan Season 2", hasAnilistId: true },
-  35760: { slug: "attack-on-titan", name: "Attack on Titan Season 3", hasAnilistId: true }, 
-  139630: { slug: "attack-on-titan", name: "Attack on Titan Final Season", hasAnilistId: true },
-  113415: { slug: "jujutsu-kaisen", name: "Jujutsu Kaisen", hasAnilistId: true },
-  145134: { slug: "jujutsu-kaisen", name: "Jujutsu Kaisen Season 2", hasAnilistId: true },
-  97940: { slug: "black-clover", name: "Black Clover", hasAnilistId: true },
-  21087: { slug: "one-punch-man", name: "One Punch Man", hasAnilistId: true },
-  11061: { slug: "hunter-x-hunter-2011", name: "Hunter x Hunter (2011)", hasAnilistId: true },
-  1535: { slug: "death-note", name: "Death Note", hasAnilistId: true },
-  127230: { slug: "chainsaw-man", name: "Chainsaw Man", hasAnilistId: true }
+  // Bleach Series
+  269: { slug: "bleach", name: "Bleach", hasAnilistId: true, urlType: "series" },
+  41467: { slug: "bleach-thousand-year-blood-war", name: "Bleach: Thousand-Year Blood War", hasAnilistId: true, urlType: "episode" },
+  
+  // Demon Slayer Series
+  101922: { slug: "demon-slayer", name: "Demon Slayer", hasAnilistId: true, urlType: "episode" },
+  142329: { slug: "demon-slayer", name: "Demon Slayer Season 2", hasAnilistId: true, urlType: "episode" }, 
+  145139: { slug: "demon-slayer", name: "Demon Slayer Season 3", hasAnilistId: true, urlType: "episode" }, 
+  166240: { slug: "demon-slayer", name: "Demon Slayer Season 4", hasAnilistId: true, urlType: "episode" },
+  
+  // Naruto Series
+  20: { slug: "naruto", name: "Naruto", hasAnilistId: true, urlType: "series" },
+  1735: { slug: "naruto-shippuden", name: "Naruto Shippuden", hasAnilistId: true, urlType: "series" },
+  
+  // One Piece
+  21: { slug: "one-piece", name: "One Piece", hasAnilistId: true, urlType: "series" },
+  
+  // Attack on Titan Series
+  16498: { slug: "attack-on-titan", name: "Attack on Titan", hasAnilistId: true, urlType: "episode" },
+  25777: { slug: "attack-on-titan", name: "Attack on Titan Season 2", hasAnilistId: true, urlType: "episode" },
+  35760: { slug: "attack-on-titan", name: "Attack on Titan Season 3", hasAnilistId: true, urlType: "episode" }, 
+  139630: { slug: "attack-on-titan", name: "Attack on Titan Final Season", hasAnilistId: true, urlType: "episode" },
+  
+  // Jujutsu Kaisen
+  113415: { slug: "jujutsu-kaisen", name: "Jujutsu Kaisen", hasAnilistId: true, urlType: "episode" },
+  145134: { slug: "jujutsu-kaisen", name: "Jujutsu Kaisen Season 2", hasAnilistId: true, urlType: "episode" },
+  
+  // Black Clover
+  97940: { slug: "black-clover", name: "Black Clover", hasAnilistId: true, urlType: "series" },
+  
+  // One Punch Man
+  21087: { slug: "one-punch-man", name: "One Punch Man", hasAnilistId: true, urlType: "episode" },
+  30276: { slug: "one-punch-man", name: "One Punch Man Season 2", hasAnilistId: true, urlType: "episode" },
+  
+  // Hunter x Hunter
+  11061: { slug: "hunter-x-hunter", name: "Hunter x Hunter (2011)", hasAnilistId: true, urlType: "series" },
+  
+  // Death Note
+  1535: { slug: "death-note", name: "Death Note", hasAnilistId: true, urlType: "series" },
+  
+  // Chainsaw Man
+  127230: { slug: "chainsaw-man", name: "Chainsaw Man", hasAnilistId: true, urlType: "episode" },
+  
+  // My Hero Academia
+  31964: { slug: "my-hero-academia", name: "My Hero Academia", hasAnilistId: true, urlType: "episode" },
+  38408: { slug: "my-hero-academia", name: "My Hero Academia Season 2", hasAnilistId: true, urlType: "episode" },
+  99693: { slug: "my-hero-academia", name: "My Hero Academia Season 3", hasAnilistId: true, urlType: "episode" },
+  102487: { slug: "my-hero-academia", name: "My Hero Academia Season 4", hasAnilistId: true, urlType: "episode" },
+  113717: { slug: "my-hero-academia", name: "My Hero Academia Season 5", hasAnilistId: true, urlType: "episode" },
+  133844: { slug: "my-hero-academia", name: "My Hero Academia Season 6", hasAnilistId: true, urlType: "episode" },
+  
+  // Sword Art Online
+  11757: { slug: "sword-art-online", name: "Sword Art Online", hasAnilistId: true, urlType: "series" },
+  20021: { slug: "sword-art-online", name: "Sword Art Online II", hasAnilistId: true, urlType: "series" },
+  31765: { slug: "sword-art-online", name: "Sword Art Online: Alicization", hasAnilistId: true, urlType: "series" },
+  
+  // Haikyuu!!
+  20583: { slug: "haikyuu", name: "Haikyuu!!", hasAnilistId: true, urlType: "series" },
+  28891: { slug: "haikyuu", name: "Haikyuu!! Second Season", hasAnilistId: true, urlType: "series" },
+  36946: { slug: "haikyuu", name: "Haikyuu!! Third Season", hasAnilistId: true, urlType: "series" },
+  38883: { slug: "haikyuu", name: "Haikyuu!! To The Top", hasAnilistId: true, urlType: "series" },
+  
+  // Tokyo Revengers
+  121496: { slug: "tokyo-revengers", name: "Tokyo Revengers", hasAnilistId: true, urlType: "episode" },
+  131681: { slug: "tokyo-revengers", name: "Tokyo Revengers Season 2", hasAnilistId: true, urlType: "episode" },
+  
+  // Spy x Family
+  140960: { slug: "spy-x-family", name: "Spy x Family", hasAnilistId: true, urlType: "episode" },
+  151661: { slug: "spy-x-family", name: "Spy x Family Season 2", hasAnilistId: true, urlType: "episode" },
+  
+  // Vinland Saga
+  101348: { slug: "vinland-saga", name: "Vinland Saga", hasAnilistId: true, urlType: "episode" },
+  119662: { slug: "vinland-saga", name: "Vinland Saga Season 2", hasAnilistId: true, urlType: "episode" },
+  
+  // Dr. Stone
+  105333: { slug: "dr-stone", name: "Dr. Stone", hasAnilistId: true, urlType: "episode" },
+  110624: { slug: "dr-stone", name: "Dr. Stone: Stone Wars", hasAnilistId: true, urlType: "episode" },
+  132394: { slug: "dr-stone", name: "Dr. Stone: New World", hasAnilistId: true, urlType: "episode" },
+  
+  // Fire Force
+  38671: { slug: "fire-force", name: "Fire Force", hasAnilistId: true, urlType: "episode" },
+  112151: { slug: "fire-force", name: "Fire Force Season 2", hasAnilistId: true, urlType: "episode" },
+  
+  // Mob Psycho 100
+  32182: { slug: "mob-psycho-100", name: "Mob Psycho 100", hasAnilistId: true, urlType: "episode" },
+  97516: { slug: "mob-psycho-100", name: "Mob Psycho 100 II", hasAnilistId: true, urlType: "episode" },
+  
+  // Re:Zero
+  21355: { slug: "rezero", name: "Re:ZERO -Starting Life in Another World-", hasAnilistId: true, urlType: "episode" },
+  108465: { slug: "rezero", name: "Re:ZERO Season 2", hasAnilistId: true, urlType: "episode" },
+  
+  // The Rising of the Shield Hero
+  99263: { slug: "the-rising-of-the-shield-hero", name: "The Rising of the Shield Hero", hasAnilistId: true, urlType: "episode" },
+  131588: { slug: "the-rising-of-the-shield-hero", name: "The Rising of the Shield Hero Season 2", hasAnilistId: true, urlType: "episode" },
+  143270: { slug: "the-rising-of-the-shield-hero", name: "The Rising of the Shield Hero Season 3", hasAnilistId: true, urlType: "episode" },
+  
+  // That Time I Got Reincarnated as a Slime
+  37430: { slug: "that-time-i-got-reincarnated-as-a-slime", name: "That Time I Got Reincarnated as a Slime", hasAnilistId: true, urlType: "episode" },
+  108465: { slug: "that-time-i-got-reincarnated-as-a-slime", name: "That Time I Got Reincarnated as a Slime Season 2", hasAnilistId: true, urlType: "episode" },
+  114267: { slug: "that-time-i-got-reincarnated-as-a-slime", name: "That Time I Got Reincarnated as a Slime Season 3", hasAnilistId: true, urlType: "episode" },
+  
+  // Dragon Ball Series
+  223: { slug: "dragon-ball", name: "Dragon Ball", hasAnilistId: true, urlType: "series" },
+  813: { slug: "dragon-ball-z", name: "Dragon Ball Z", hasAnilistId: true, urlType: "series" },
+  23283: { slug: "dragon-ball-super", name: "Dragon Ball Super", hasAnilistId: true, urlType: "series" },
+  
+  // Fairy Tail
+  6702: { slug: "fairy-tail", name: "Fairy Tail", hasAnilistId: true, urlType: "series" },
+  19775: { slug: "fairy-tail", name: "Fairy Tail (2014)", hasAnilistId: true, urlType: "series" },
+  
+  // Fullmetal Alchemist
+  5114: { slug: "fullmetal-alchemist-brotherhood", name: "Fullmetal Alchemist: Brotherhood", hasAnilistId: true, urlType: "series" },
+  
+  // Code Geass
+  1575: { slug: "code-geass", name: "Code Geass: Lelouch of the Rebellion", hasAnilistId: true, urlType: "series" },
+  
+  // Steins;Gate
+  9253: { slug: "steinsgate", name: "Steins;Gate", hasAnilistId: true, urlType: "series" },
+  
+  // Cowboy Bebop
+  1: { slug: "cowboy-bebop", name: "Cowboy Bebop", hasAnilistId: true, urlType: "series" },
+  
+  // Neon Genesis Evangelion
+  30: { slug: "neon-genesis-evangelion", name: "Neon Genesis Evangelion", hasAnilistId: true, urlType: "series" },
+  
+  // JoJo's Bizarre Adventure
+  14719: { slug: "jojos-bizarre-adventure", name: "JoJo's Bizarre Adventure", hasAnilistId: true, urlType: "series" },
+  20899: { slug: "jojos-bizarre-adventure", name: "JoJo's Bizarre Adventure: Stardust Crusaders", hasAnilistId: true, urlType: "series" },
+  34561: { slug: "jojos-bizarre-adventure", name: "JoJo's Bizarre Adventure: Diamond is Unbreakable", hasAnilistId: true, urlType: "series" },
+  37991: { slug: "jojos-bizarre-adventure", name: "JoJo's Bizarre Adventure: Golden Wind", hasAnilistId: true, urlType: "series" },
+  113717: { slug: "jojos-bizarre-adventure", name: "JoJo's Bizarre Adventure: Stone Ocean", hasAnilistId: true, urlType: "series" },
+  
+  // Blue Lock
+  118087: { slug: "blue-lock", name: "Blue Lock", hasAnilistId: true, urlType: "episode" },
+  
+  // Bocchi the Rock!
+  47917: { slug: "bocchi-the-rock", name: "Bocchi the Rock!", hasAnilistId: true, urlType: "episode" },
+  
+  // Oshi no Ko
+  150672: { slug: "oshi-no-ko", name: "Oshi no Ko", hasAnilistId: true, urlType: "episode" },
+  
+  // Hell's Paradise
+  142838: { slug: "hells-paradise", name: "Hell's Paradise", hasAnilistId: true, urlType: "episode" },
+  
+  // Mushoku Tensei
+  39587: { slug: "mushoku-tensei", name: "Mushoku Tensei: Jobless Reincarnation", hasAnilistId: true, urlType: "episode" },
+  114267: { slug: "mushoku-tensei", name: "Mushoku Tensei Season 2", hasAnilistId: true, urlType: "episode" },
+  
+  // The Eminence in Shadow
+  114081: { slug: "the-eminence-in-shadow", name: "The Eminence in Shadow", hasAnilistId: true, urlType: "episode" },
+  153156: { slug: "the-eminence-in-shadow", name: "The Eminence in Shadow Season 2", hasAnilistId: true, urlType: "episode" },
+  
+  // Cyberpunk: Edgerunners
+  125419: { slug: "cyberpunk-edgerunners", name: "Cyberpunk: Edgerunners", hasAnilistId: true, urlType: "episode" },
+  
+  // Chainsaw Man
+  127230: { slug: "chainsaw-man", name: "Chainsaw Man", hasAnilistId: true, urlType: "episode" },
+  
+  // Solo Leveling
+  153518: { slug: "solo-leveling", name: "Solo Leveling", hasAnilistId: true, urlType: "episode" },
+  
+  // Frieren: Beyond Journey's End
+  154587: { slug: "frieren-beyond-journeys-end", name: "Frieren: Beyond Journey's End", hasAnilistId: true, urlType: "episode" },
+  
+  // Apothecary Diaries
+  151589: { slug: "the-apothecary-diaries", name: "The Apothecary Diaries", hasAnilistId: true, urlType: "episode" }
 };
 
 // Random anime pool
-let randomAnimePool = [20, 113415, 127230, 97940, 21087, 16498];
+let randomAnimePool = [20, 113415, 127230, 97940, 21087, 16498, 11757, 20583, 31964, 39587, 121496, 140960, 118087, 151589];
 
 // API statistics
 let apiStats = {
@@ -51,10 +197,27 @@ let apiStats = {
   lastUpdated: new Date().toISOString()
 };
 
+// File paths for Vercel compatibility
+const DATA_DIR = process.env.VERCEL ? '/tmp' : __dirname;
+const DB_FILE = path.join(DATA_DIR, 'anime_database.json');
+const SESSIONS_FILE = path.join(DATA_DIR, 'sessions.json');
+
+// Ensure data directory exists
+async function ensureDataDir() {
+  if (!process.env.VERCEL) {
+    try {
+      await fs.access(DATA_DIR);
+    } catch (error) {
+      await fs.mkdir(DATA_DIR, { recursive: true });
+    }
+  }
+}
+
 // Load/Save database functions
 async function loadDatabase() {
   try {
-    const data = await fs.readFile('anime_database.json', 'utf8');
+    await ensureDataDir();
+    const data = await fs.readFile(DB_FILE, 'utf8');
     const savedData = JSON.parse(data);
     slugExceptions = { ...slugExceptions, ...savedData.slugExceptions };
     randomAnimePool = savedData.randomAnimePool || randomAnimePool;
@@ -68,13 +231,14 @@ async function loadDatabase() {
 
 async function saveDatabase() {
   try {
+    await ensureDataDir();
     const dataToSave = {
       slugExceptions,
       randomAnimePool,
       apiStats,
       lastSaved: new Date().toISOString()
     };
-    await fs.writeFile('anime_database.json', JSON.stringify(dataToSave, null, 2));
+    await fs.writeFile(DB_FILE, JSON.stringify(dataToSave, null, 2));
     console.log('💾 Database saved successfully');
   } catch (error) {
     console.error('❌ Failed to save database:', error.message);
@@ -84,7 +248,8 @@ async function saveDatabase() {
 // Enhanced session management with IP tracking and 5-day expiration
 async function loadSessions() {
   try {
-    const data = await fs.readFile('sessions.json', 'utf8');
+    await ensureDataDir();
+    const data = await fs.readFile(SESSIONS_FILE, 'utf8');
     const savedSessions = JSON.parse(data);
     
     // Filter out expired sessions
@@ -107,8 +272,9 @@ async function loadSessions() {
 
 async function saveSessions() {
   try {
+    await ensureDataDir();
     const sessionsObject = Object.fromEntries(sessions);
-    await fs.writeFile('sessions.json', JSON.stringify(sessionsObject, null, 2));
+    await fs.writeFile(SESSIONS_FILE, JSON.stringify(sessionsObject, null, 2));
   } catch (error) {
     console.error('❌ Failed to save sessions:', error.message);
   }
@@ -164,7 +330,7 @@ function trackAPIUsage(success = true) {
 
 // Enhanced authentication middleware with IP checking
 function requireAuth(req, res, next) {
-  const sessionId = req.headers.authorization;
+  const sessionId = req.headers.authorization || req.query.token;
   const clientIP = getClientIP(req);
   
   if (sessionId && sessions.has(sessionId)) {
@@ -173,15 +339,8 @@ function requireAuth(req, res, next) {
     // Check if session is expired
     if (Date.now() > sessionData.expiresAt) {
       sessions.delete(sessionId);
+      saveSessions();
       return res.status(401).json({ error: 'Session expired' });
-    }
-    
-    // Check if IP matches (optional, can be removed if you want multi-IP access)
-    if (sessionData.ip !== clientIP) {
-      console.log(`⚠️ IP mismatch for session: ${sessionData.ip} vs ${clientIP}`);
-      // You can choose to invalidate session here or allow it
-      // sessions.delete(sessionId);
-      // return res.status(401).json({ error: 'Session IP mismatch' });
     }
     
     // Update session expiration on activity (optional)
@@ -304,18 +463,18 @@ function generateSlugs(animeInfo, anilistId) {
   return slugs;
 }
 
-// Enhanced episode finder
-async function findEpisode(slugs, season, episode, animeInfo) {
+// Enhanced episode finder with URL type support and seasonxepisode priority
+async function findEpisode(slugs, season, episode, animeInfo, urlType = "episode") {
   const baseUrl = 'https://watchanimeworld.in';
   
   for (const slug of slugs) {
-    console.log(`🎯 Trying slug: ${slug}`);
+    console.log(`🎯 Trying slug: ${slug} with URL type: ${urlType}`);
     
     const pathConfigs = [
       {
         type: 'episode',
         patterns: [
-          `/episode/${slug}-${season}x${episode}/`,
+          `/episode/${slug}-${season}x${episode}/`,  // Priority: seasonxepisode format
           `/episode/${slug}-season-${season}-episode-${episode}/`,
           `/episode/${slug}-s${season}e${episode}/`,
           `/episode/${slug}-ep-${episode}/`,
@@ -334,7 +493,10 @@ async function findEpisode(slugs, season, episode, animeInfo) {
       }
     ];
 
-    for (const config of pathConfigs) {
+    // If specific URL type is requested, only try that type
+    const configsToTry = urlType === "auto" ? pathConfigs : pathConfigs.filter(config => config.type === urlType);
+
+    for (const config of configsToTry) {
       for (const pattern of config.patterns) {
         const episodeUrl = baseUrl + pattern;
         
@@ -357,7 +519,7 @@ async function findEpisode(slugs, season, episode, animeInfo) {
             const notErrorPage = !pageTitle.includes('404') && !pageTitle.includes('not found');
             
             if (notErrorPage && hasVideo) {
-              console.log(`✅ Valid page found: ${config.type}`);
+              console.log(`✅ Valid page found: ${config.type} - ${episodeUrl}`);
               
               const sources = extractVideoSources($, baseUrl);
               
@@ -426,7 +588,7 @@ function detectServer(url) {
   return 'Unknown Server';
 }
 
-// Clean iframe player - UPDATED: Only iframe, no text or buttons
+// Clean iframe player - Only iframe, no text or buttons
 function generateCleanIframePlayer(url) {
   return `<!DOCTYPE html>
 <html lang="en">
@@ -468,7 +630,7 @@ function generateCleanIframePlayer(url) {
 </html>`;
 }
 
-// Enhanced player with navigation - UPDATED: Removed all buttons and text
+// Enhanced player with navigation - Removed all buttons and text
 function generatePlayer(title, season, episode, sources, contentUrl, anilistId) {
   if (sources.length === 0) {
     return `<!DOCTYPE html>
@@ -541,7 +703,7 @@ function generatePlayer(title, season, episode, sources, contentUrl, anilistId) 
 app.get('/', (req, res) => {
   res.json({
     message: '🎬 AnimeWorld API with Enhanced Admin Panel',
-    version: '3.0.0',
+    version: '3.1.0',
     status: 'active',
     endpoints: [
       {
@@ -564,7 +726,7 @@ app.get('/', (req, res) => {
       {
         method: 'GET',
         url: '/admin',
-        description: 'Admin panel'
+        description: 'Admin panel (password: 123Admin09)'
       }
     ]
   });
@@ -585,7 +747,7 @@ app.get('/api/iframe', (req, res) => {
   res.send(html);
 });
 
-// Main streaming endpoint
+// Main streaming endpoint with URL type support
 app.get('/api/anime/:anilistId/:season/:episode', async (req, res) => {
   const { anilistId, season, episode } = req.params;
   const jsonMode = req.query.json === '1';
@@ -598,13 +760,15 @@ app.get('/api/anime/:anilistId/:season/:episode', async (req, res) => {
     const isInDatabase = slugExceptions[anilistId];
     let animeInfo = null;
     let primaryTitle = 'Unknown Anime';
+    let urlType = "episode"; // Default to episode URLs
 
     if (isInDatabase) {
       const dbEntry = slugExceptions[anilistId];
       const dbSlug = dbEntry.slug;
       const dbName = dbEntry.name;
+      urlType = dbEntry.urlType || "episode"; // Use stored URL type
       
-      console.log(`🎯 Found in database: ${dbSlug}`);
+      console.log(`🎯 Found in database: ${dbSlug} (URL Type: ${urlType})`);
       
       // Try to get AniList info only if it has AniList ID
       if (dbEntry.hasAnilistId) {
@@ -631,16 +795,54 @@ app.get('/api/anime/:anilistId/:season/:episode', async (req, res) => {
       const slugs = [dbSlug];
       console.log(`🧠 Using database slug: ${slugs}`);
 
-      // Find episode
-      console.log('🎯 Searching for content...');
-      const result = await findEpisode(slugs, season, episode, animeInfo);
+      // Find episode with specific URL type
+      console.log(`🎯 Searching for content with URL type: ${urlType}...`);
+      const result = await findEpisode(slugs, season, episode, animeInfo, urlType);
 
       if (!result) {
+        // If specific URL type fails, try auto mode
+        console.log(`❌ ${urlType} URL type failed, trying auto mode...`);
+        const autoResult = await findEpisode(slugs, season, episode, animeInfo, "auto");
+        if (autoResult) {
+          console.log(`✅ Found with auto mode: ${autoResult.pathType}`);
+          trackAPIUsage(true);
+          
+          const responseData = {
+            success: true,
+            id: parseInt(anilistId),
+            anime_title: primaryTitle,
+            season: parseInt(season),
+            episode: parseInt(episode),
+            slug: autoResult.slug,
+            content_url: autoResult.url,
+            sources: autoResult.sources,
+            from_database: true,
+            has_anilist_id: dbEntry.hasAnilistId,
+            url_type: autoResult.pathType
+          };
+
+          if (jsonMode) {
+            return res.json(responseData);
+          }
+
+          if (cleanMode && autoResult.sources.length > 0) {
+            const primarySource = autoResult.sources[0];
+            const html = generateCleanIframePlayer(primarySource.url);
+            res.setHeader('Content-Type', 'text/html; charset=utf-8');
+            return res.send(html);
+          }
+
+          const html = generatePlayer(primaryTitle, season, episode, autoResult.sources, autoResult.url, anilistId);
+          res.setHeader('Content-Type', 'text/html; charset=utf-8');
+          return res.send(html);
+        }
+        
         trackAPIUsage(false);
         return res.status(404).json({ 
           error: 'Content not found',
           anime_title: primaryTitle,
-          tried_slugs: slugs
+          tried_slugs: slugs,
+          url_type: urlType
         });
       }
 
@@ -657,7 +859,8 @@ app.get('/api/anime/:anilistId/:season/:episode', async (req, res) => {
         content_url: result.url,
         sources: result.sources,
         from_database: true,
-        has_anilist_id: dbEntry.hasAnilistId
+        has_anilist_id: dbEntry.hasAnilistId,
+        url_type: result.pathType
       };
 
       if (jsonMode) {
@@ -695,9 +898,9 @@ app.get('/api/anime/:anilistId/:season/:episode', async (req, res) => {
       const slugs = generateSlugs(animeInfo, parseInt(anilistId));
       console.log(`🧠 Generated slugs: ${slugs}`);
 
-      // Find episode
-      console.log('🎯 Searching for content...');
-      const result = await findEpisode(slugs, season, episode, animeInfo);
+      // Find episode with auto URL type detection
+      console.log('🎯 Searching for content with auto URL type detection...');
+      const result = await findEpisode(slugs, season, episode, animeInfo, "auto");
 
       if (!result) {
         trackAPIUsage(false);
@@ -720,7 +923,8 @@ app.get('/api/anime/:anilistId/:season/:episode', async (req, res) => {
         slug: result.slug,
         content_url: result.url,
         sources: result.sources,
-        from_database: false
+        from_database: false,
+        url_type: result.pathType
       };
 
       if (jsonMode) {
@@ -821,7 +1025,7 @@ app.get('/api/random', async (req, res) => {
 app.get('/health', (req, res) => {
   res.json({ 
     status: 'active',
-    version: '3.0.0',
+    version: '3.1.0',
     database_entries: Object.keys(slugExceptions).length,
     random_pool: randomAnimePool.length,
     total_requests: apiStats.totalRequests,
@@ -896,14 +1100,15 @@ app.get('/admin/database', requireAuth, (req, res) => {
     id: parseInt(id),
     name: entry.name,
     slug: entry.slug,
-    hasAnilistId: entry.hasAnilistId
+    hasAnilistId: entry.hasAnilistId,
+    urlType: entry.urlType || 'episode'
   }));
   
   res.json({ database: databaseArray });
 });
 
 app.post('/admin/anime', requireAuth, async (req, res) => {
-  const { id, name, slug, hasAnilistId } = req.body;
+  const { id, name, slug, hasAnilistId, urlType } = req.body;
   
   if (!id || !slug || !name) {
     return res.status(400).json({ error: 'ID, name, and slug are required' });
@@ -913,7 +1118,8 @@ app.post('/admin/anime', requireAuth, async (req, res) => {
   slugExceptions[id] = {
     slug: slug,
     name: name,
-    hasAnilistId: hasAnilistId || false
+    hasAnilistId: hasAnilistId || false,
+    urlType: urlType || 'episode'
   };
   
   // Add to random pool if it's a new entry and has AniList ID
@@ -956,7 +1162,8 @@ app.post('/admin/bulk-add', requireAuth, async (req, res) => {
       slugExceptions[anime.id] = {
         slug: anime.slug,
         name: anime.name,
-        hasAnilistId: anime.hasAnilistId || false
+        hasAnilistId: anime.hasAnilistId || false,
+        urlType: anime.urlType || 'episode'
       };
       
       // Add to random pool if it has AniList ID
@@ -967,7 +1174,8 @@ app.post('/admin/bulk-add', requireAuth, async (req, res) => {
       results.added.push({
         id: anime.id,
         title: anime.name,
-        slug: anime.slug
+        slug: anime.slug,
+        urlType: anime.urlType || 'episode'
       });
       
     } catch (error) {
@@ -1015,6 +1223,7 @@ app.post('/admin/fetch-anime-info', requireAuth, async (req, res) => {
           name: animeInfo.english || animeInfo.romaji,
           slug: slug,
           hasAnilistId: true,
+          urlType: 'episode', // Default to episode URLs
           success: true
         });
       } else {
@@ -1023,6 +1232,7 @@ app.post('/admin/fetch-anime-info', requireAuth, async (req, res) => {
           name: 'Unknown',
           slug: 'unknown',
           hasAnilistId: true,
+          urlType: 'episode',
           success: false,
           error: 'Not found on AniList'
         });
@@ -1033,6 +1243,7 @@ app.post('/admin/fetch-anime-info', requireAuth, async (req, res) => {
         name: 'Unknown',
         slug: 'unknown',
         hasAnilistId: true,
+        urlType: 'episode',
         success: false,
         error: error.message
       });
@@ -1335,6 +1546,15 @@ app.get('/admin', (req, res) => {
             margin-left: 8px;
         }
         
+        .url-type {
+            background: var(--success);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            margin-left: 8px;
+        }
+        
         .delete-btn {
             background: var(--danger);
             color: white;
@@ -1505,6 +1725,14 @@ app.get('/admin', (req, res) => {
                                 <div class="form-group">
                                     <label>Anime URL Slug</label>
                                     <input type="text" id="animeSlug" placeholder="e.g., bleach-thousand-year-blood-war" required>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label>URL Type</label>
+                                    <select id="urlType">
+                                        <option value="episode">Episode URLs (recommended)</option>
+                                        <option value="series">Series URLs</option>
+                                    </select>
                                 </div>
                                 
                                 <button type="submit">Add to Database</button>
@@ -1681,6 +1909,7 @@ app.get('/admin', (req, res) => {
             const anilistId = hasAnilistId ? parseInt(document.getElementById('anilistId').value) : null;
             const customId = !hasAnilistId ? parseInt(document.getElementById('customId').value) : null;
             const slug = document.getElementById('animeSlug').value;
+            const urlType = document.getElementById('urlType').value;
             
             const finalId = hasAnilistId ? anilistId : customId;
             
@@ -1695,7 +1924,8 @@ app.get('/admin', (req, res) => {
                         id: finalId,
                         name,
                         slug,
-                        hasAnilistId
+                        hasAnilistId,
+                        urlType
                     })
                 });
                 
@@ -1764,7 +1994,7 @@ app.get('/admin', (req, res) => {
                     <div>
                         <strong>\${anime.name}</strong>
                         <div style="font-size: 0.9em; color: var(--text-muted);">
-                            ID: \${anime.id} • Slug: \${anime.slug}
+                            ID: \${anime.id} • Slug: \${anime.slug} • URL Type: \${anime.urlType}
                             \${anime.success ? '<span style="color: var(--success);">✓</span>' : '<span style="color: var(--danger);">✗ ' + anime.error + '</span>'}
                         </div>
                     </div>
@@ -1794,7 +2024,8 @@ app.get('/admin', (req, res) => {
                             id: anime.id,
                             name: anime.name,
                             slug: anime.slug,
-                            hasAnilistId: anime.hasAnilistId
+                            hasAnilistId: anime.hasAnilistId,
+                            urlType: anime.urlType
                         }))
                     })
                 });
@@ -1862,6 +2093,7 @@ app.get('/admin', (req, res) => {
                     const displayName = entry.name;
                     const slug = entry.slug;
                     const type = entry.hasAnilistId ? 'AniList' : 'Custom';
+                    const urlType = entry.urlType || 'episode';
                     
                     item.innerHTML = \`
                         <div class="anime-info">
@@ -1869,6 +2101,7 @@ app.get('/admin', (req, res) => {
                             <div class="anime-name">
                                 \${displayName}
                                 <span class="anime-type">\${type}</span>
+                                <span class="url-type">\${urlType}</span>
                             </div>
                             <div class="anime-slug">\${slug}</div>
                         </div>

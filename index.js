@@ -350,7 +350,7 @@ function detectServer(url) {
   return 'Unknown Server';
 }
 
-// Clean iframe-only player
+// Clean iframe-only player - UPDATED VERSION
 function generateCleanIframePlayer(sourceUrl) {
   return `<!DOCTYPE html>
 <html lang="en">
@@ -371,37 +371,17 @@ function generateCleanIframePlayer(sourceUrl) {
             width: 100vw;
         }
         #player {
-            width: 100%;
-            height: 100%;
+            width: 100vw;
+            height: 100vh;
             border: none;
             position: fixed;
             top: 0;
             left: 0;
             z-index: 9999;
         }
-        .back-btn {
-            position: fixed;
-            top: 15px;
-            left: 15px;
-            z-index: 10000;
-            background: rgba(0,0,0,0.7);
-            color: white;
-            border: none;
-            padding: 10px 15px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 14px;
-            text-decoration: none;
-            font-family: Arial, sans-serif;
-            transition: opacity 0.3s ease;
-        }
-        .back-btn:hover {
-            background: rgba(0,0,0,0.9);
-        }
     </style>
 </head>
 <body>
-    <a href="javascript:history.back()" class="back-btn">← Back</a>
     <iframe 
         id="player" 
         src="${sourceUrl}" 
@@ -412,23 +392,15 @@ function generateCleanIframePlayer(sourceUrl) {
     </iframe>
     
     <script>
-        // Make iframe truly fullscreen
+        // Ensure iframe takes full viewport
         document.getElementById('player').style.width = '100vw';
         document.getElementById('player').style.height = '100vh';
         
-        // Hide back button after 3 seconds
-        setTimeout(() => {
-            document.querySelector('.back-btn').style.opacity = '0.3';
-        }, 3000);
-        
-        // Show back button on hover
-        document.querySelector('.back-btn').addEventListener('mouseenter', () => {
-            document.querySelector('.back-btn').style.opacity = '1';
-        });
-        
-        document.querySelector('.back-btn').addEventListener('mouseleave', () => {
-            document.querySelector('.back-btn').style.opacity = '0.3';
-        });
+        // Remove any potential margin/padding
+        document.body.style.margin = '0';
+        document.body.style.padding = '0';
+        document.documentElement.style.margin = '0';
+        document.documentElement.style.padding = '0';
     </script>
 </body>
 </html>`;

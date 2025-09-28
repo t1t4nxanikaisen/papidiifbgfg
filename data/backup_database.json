@@ -1,0 +1,598 @@
+[
+  {
+    "slug": "one-piece",
+    "anilistId": 21,
+    "normalizedTitle": "one piece",
+    "sources": [
+      "animeworld",
+      "toonstream",
+      "gogoanime"
+    ]
+  },
+  {
+    "slug": "naruto",
+    "anilistId": 20,
+    "normalizedTitle": "naruto",
+    "sources": [
+      "animeworld",
+      "toonstream",
+      "gogoanime"
+    ]
+  },
+  {
+    "slug": "dragon-ball",
+    "anilistId": 2236,
+    "normalizedTitle": "dragon ball",
+    "sources": [
+      "animeworld",
+      "toonstream",
+      "gogoanime"
+    ]
+  },
+  {
+    "slug": "dragon-ball-z",
+    "anilistId": 813,
+    "normalizedTitle": "dragon ball z",
+    "sources": [
+      "animeworld",
+      "toonstream",
+      "gogoanime"
+    ]
+  },
+  {
+    "slug": "dragon-ball-super",
+    "anilistId": 21634,
+    "normalizedTitle": "dragon ball super",
+    "sources": [
+      "animeworld",
+      "toonstream",
+      "gogoanime"
+    ]
+  },
+  {
+    "slug": "bleach",
+    "anilistId": 269,
+    "normalizedTitle": "bleach",
+    "sources": [
+      "animeworld",
+      "toonstream",
+      "gogoanime"
+    ]
+  },
+  {
+    "slug": "fairy-tail",
+    "anilistId": 6702,
+    "normalizedTitle": "fairy tail",
+    "sources": [
+      "animeworld",
+      "toonstream",
+      "gogoanime"
+    ]
+  },
+  {
+    "slug": "hunter-x-hunter",
+    "anilistId": 11061,
+    "normalizedTitle": "hunter x hunter",
+    "sources": [
+      "animeworld",
+      "toonstream",
+      "gogoanime"
+    ]
+  },
+  {
+    "slug": "my-hero-academia",
+    "anilistId": 101348,
+    "normalizedTitle": "my hero academia",
+    "sources": [
+      "animeworld",
+      "toonstream",
+      "gogoanime"
+    ]
+  },
+  {
+    "slug": "demon-slayer",
+    "anilistId": 101922,
+    "normalizedTitle": "demon slayer",
+    "sources": [
+      "animeworld",
+      "toonstream",
+      "gogoanime"
+    ]
+  },
+  {
+    "slug": "jujutsu-kaisen",
+    "anilistId": 113415,
+    "normalizedTitle": "jujutsu kaisen",
+    "sources": [
+      "animeworld",
+      "toonstream",
+      "gogoanime"
+    ]
+  },
+  {
+    "slug": "chainsaw-man",
+    "anilistId": 140339,
+    "normalizedTitle": "chainsaw man",
+    "sources": [
+      "animeworld",
+      "toonstream",
+      "gogoanime"
+    ]
+  },
+  {
+    "slug": "spy-x-family",
+    "anilistId": 140339,
+    "normalizedTitle": "spy x family",
+    "sources": [
+      "animeworld",
+      "toonstream",
+      "gogoanime"
+    ]
+  },
+  {
+    "slug": "tokyo-revengers",
+    "anilistId": 120328,
+    "normalizedTitle": "tokyo revengers",
+    "sources": [
+      "animeworld",
+      "toonstream",
+      "gogoanime"
+    ]
+  },
+  {
+    "slug": "vinland-saga",
+    "anilistId": 101348,
+    "normalizedTitle": "vinland saga",
+    "sources": [
+      "animeworld",
+      "toonstream",
+      "gogoanime"
+    ]
+  },
+  {
+    "slug": "attack-on-titan",
+    "anilistId": 16498,
+    "normalizedTitle": "attack on titan",
+    "sources": [
+      "animeworld",
+      "toonstream",
+      "gogoanime"
+    ]
+  },
+  {
+    "slug": "fullmetal-alchemist-brotherhood",
+    "anilistId": 5114,
+    "normalizedTitle": "fullmetal alchemist brotherhood",
+    "sources": [
+      "animeworld",
+      "toonstream",
+      "gogoanime"
+    ]
+  },
+  {
+    "slug": "code-geass",
+    "anilistId": 1575,
+    "normalizedTitle": "code geass",
+    "sources": [
+      "animeworld",
+      "toonstream",
+      "gogoanime"
+    ]
+  },
+  {
+    "slug": "steins-gate",
+    "anilistId": 9253,
+    "normalizedTitle": "steins gate",
+    "sources": [
+      "animeworld",
+      "toonstream",
+      "gogoanime"
+    ]
+  },
+  {
+    "slug": "cowboy-bebop",
+    "anilistId": 1,
+    "normalizedTitle": "cowboy bebop",
+    "sources": [
+      "animeworld",
+      "toonstream",
+      "gogoanime"
+    ]
+  },
+  {
+    "slug": "frieren-beyond-journeys-end",
+    "anilistId": 146065,
+    "normalizedTitle": "frieren beyond journeys end",
+    "sources": [
+      "animeworld",
+      "toonstream"
+    ]
+  },
+  {
+    "slug": "solo-leveling",
+    "anilistId": 142838,
+    "normalizedTitle": "solo leveling",
+    "sources": [
+      "animeworld",
+      "toonstream"
+    ]
+  },
+  {
+    "slug": "the-apothecary-diaries",
+    "anilistId": 146065,
+    "normalizedTitle": "the apothecary diaries",
+    "sources": [
+      "animeworld",
+      "toonstream"
+    ]
+  },
+  {
+    "slug": "kaiju-no-8",
+    "anilistId": 142838,
+    "normalizedTitle": "kaiju no 8",
+    "sources": [
+      "animeworld",
+      "toonstream"
+    ]
+  },
+  {
+    "slug": "wind-breaker",
+    "anilistId": 172403,
+    "normalizedTitle": "wind breaker",
+    "sources": [
+      "animeworld",
+      "toonstream"
+    ]
+  },
+  {
+    "slug": "blue-lock",
+    "anilistId": 140339,
+    "normalizedTitle": "blue lock",
+    "sources": [
+      "animeworld",
+      "toonstream"
+    ]
+  },
+  {
+    "slug": "mushoku-tensei",
+    "anilistId": 108632,
+    "normalizedTitle": "mushoku tensei",
+    "sources": [
+      "animeworld",
+      "toonstream"
+    ]
+  },
+  {
+    "slug": "that-time-i-got-reincarnated-as-a-slime",
+    "anilistId": 101348,
+    "normalizedTitle": "that time i got reincarnated as a slime",
+    "sources": [
+      "animeworld",
+      "toonstream"
+    ]
+  },
+  {
+    "slug": "the-eminence-in-shadow",
+    "anilistId": 151661,
+    "normalizedTitle": "the eminence in shadow",
+    "sources": [
+      "animeworld",
+      "toonstream"
+    ]
+  },
+  {
+    "slug": "hells-paradise",
+    "anilistId": 142838,
+    "normalizedTitle": "hells paradise",
+    "sources": [
+      "animeworld",
+      "toonstream"
+    ]
+  },
+  {
+    "slug": "sailor-moon",
+    "anilistId": 530,
+    "normalizedTitle": "sailor moon",
+    "sources": [
+      "animeworld",
+      "toonstream"
+    ]
+  },
+  {
+    "slug": "pokemon",
+    "anilistId": 527,
+    "normalizedTitle": "pokemon",
+    "sources": [
+      "animeworld",
+      "toonstream"
+    ]
+  },
+  {
+    "slug": "digimon",
+    "anilistId": 552,
+    "normalizedTitle": "digimon",
+    "sources": [
+      "animeworld",
+      "toonstream"
+    ]
+  },
+  {
+    "slug": "yu-gi-oh",
+    "anilistId": 681,
+    "normalizedTitle": "yu gi oh",
+    "sources": [
+      "animeworld",
+      "toonstream"
+    ]
+  },
+  {
+    "slug": "cardcaptor-sakura",
+    "anilistId": 371,
+    "normalizedTitle": "cardcaptor sakura",
+    "sources": [
+      "animeworld",
+      "toonstream"
+    ]
+  },
+  {
+    "slug": "evangelion",
+    "anilistId": 30,
+    "normalizedTitle": "neon genesis evangelion",
+    "sources": [
+      "animeworld",
+      "toonstream"
+    ]
+  },
+  {
+    "slug": "ghost-in-the-shell",
+    "anilistId": 2581,
+    "normalizedTitle": "ghost in the shell",
+    "sources": [
+      "animeworld",
+      "toonstream"
+    ]
+  },
+  {
+    "slug": "akira",
+    "anilistId": 47,
+    "normalizedTitle": "akira",
+    "sources": [
+      "animeworld",
+      "toonstream"
+    ]
+  },
+  {
+    "slug": "re-zero",
+    "anilistId": 21355,
+    "normalizedTitle": "re zero",
+    "sources": [
+      "animeworld",
+      "toonstream"
+    ]
+  },
+  {
+    "slug": "overlord",
+    "anilistId": 93483,
+    "normalizedTitle": "overlord",
+    "sources": [
+      "animeworld",
+      "toonstream"
+    ]
+  },
+  {
+    "slug": "konosuba",
+    "anilistId": 98444,
+    "normalizedTitle": "konosuba",
+    "sources": [
+      "animeworld",
+      "toonstream"
+    ]
+  },
+  {
+    "slug": "shield-hero",
+    "anilistId": 110784,
+    "normalizedTitle": "the rising of the shield hero",
+    "sources": [
+      "animeworld",
+      "toonstream"
+    ]
+  },
+  {
+    "slug": "jobless-reincarnation",
+    "anilistId": 108632,
+    "normalizedTitle": "mushoku tensei jobless reincarnation",
+    "sources": [
+      "animeworld",
+      "toonstream"
+    ]
+  },
+  {
+    "slug": "your-lie-in-april",
+    "anilistId": 101922,
+    "normalizedTitle": "your lie in april",
+    "sources": [
+      "animeworld",
+      "toonstream"
+    ]
+  },
+  {
+    "slug": "clannad",
+    "anilistId": 1727,
+    "normalizedTitle": "clannad",
+    "sources": [
+      "animeworld",
+      "toonstream"
+    ]
+  },
+  {
+    "slug": "toradora",
+    "anilistId": 4224,
+    "normalizedTitle": "toradora",
+    "sources": [
+      "animeworld",
+      "toonstream"
+    ]
+  },
+  {
+    "slug": "kaguya-sama",
+    "anilistId": 101921,
+    "normalizedTitle": "kaguya sama love is war",
+    "sources": [
+      "animeworld",
+      "toonstream"
+    ]
+  },
+  {
+    "slug": "horimiya",
+    "anilistId": 124845,
+    "normalizedTitle": "horimiya",
+    "sources": [
+      "animeworld",
+      "toonstream"
+    ]
+  },
+  {
+    "slug": "haikyu",
+    "anilistId": 20583,
+    "normalizedTitle": "haikyu",
+    "sources": [
+      "animeworld",
+      "toonstream"
+    ]
+  },
+  {
+    "slug": "kurokos-basketball",
+    "anilistId": 11771,
+    "normalizedTitle": "kurokos basketball",
+    "sources": [
+      "animeworld",
+      "toonstream"
+    ]
+  },
+  {
+    "slug": "ace-of-diamond",
+    "anilistId": 132374,
+    "normalizedTitle": "ace of diamond",
+    "sources": [
+      "animeworld",
+      "toonstream"
+    ]
+  },
+  {
+    "slug": "yuri-on-ice",
+    "anilistId": 98444,
+    "normalizedTitle": "yuri on ice",
+    "sources": [
+      "animeworld",
+      "toonstream"
+    ]
+  },
+  {
+    "slug": "monster",
+    "anilistId": 19,
+    "normalizedTitle": "monster",
+    "sources": [
+      "animeworld",
+      "toonstream"
+    ]
+  },
+  {
+    "slug": "paranoia-agent",
+    "anilistId": 323,
+    "normalizedTitle": "paranoia agent",
+    "sources": [
+      "animeworld",
+      "toonstream"
+    ]
+  },
+  {
+    "slug": "perfect-blue",
+    "anilistId": 437,
+    "normalizedTitle": "perfect blue",
+    "sources": [
+      "animeworld",
+      "toonstream"
+    ]
+  },
+  {
+    "slug": "psycho-pass",
+    "anilistId": 13601,
+    "normalizedTitle": "psycho pass",
+    "sources": [
+      "animeworld",
+      "toonstream"
+    ]
+  },
+  {
+    "slug": "gintama",
+    "anilistId": 918,
+    "normalizedTitle": "gintama",
+    "sources": [
+      "animeworld",
+      "toonstream"
+    ]
+  },
+  {
+    "slug": "daily-lives-of-high-school-boys",
+    "anilistId": 11887,
+    "normalizedTitle": "daily lives of high school boys",
+    "sources": [
+      "animeworld",
+      "toonstream"
+    ]
+  },
+  {
+    "slug": "nichijou",
+    "anilistId": 10165,
+    "normalizedTitle": "nichijou",
+    "sources": [
+      "animeworld",
+      "toonstream"
+    ]
+  },
+  {
+    "slug": "saiki-k",
+    "anilistId": 98444,
+    "normalizedTitle": "the disastrous life of saiki k",
+    "sources": [
+      "animeworld",
+      "toonstream"
+    ]
+  },
+  {
+    "slug": "spirited-away",
+    "anilistId": 199,
+    "normalizedTitle": "spirited away",
+    "sources": [
+      "animeworld",
+      "toonstream"
+    ]
+  },
+  {
+    "slug": "your-name",
+    "anilistId": 98444,
+    "normalizedTitle": "your name",
+    "sources": [
+      "animeworld",
+      "toonstream"
+    ]
+  },
+  {
+    "slug": "weathering-with-you",
+    "anilistId": 105333,
+    "normalizedTitle": "weathering with you",
+    "sources": [
+      "animeworld",
+      "toonstream"
+    ]
+  },
+  {
+    "slug": "suzume",
+    "anilistId": 146065,
+    "normalizedTitle": "suzume",
+    "sources": [
+      "animeworld",
+      "toonstream"
+    ]
+  }
+]

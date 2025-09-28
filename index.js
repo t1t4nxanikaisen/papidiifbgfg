@@ -202,7 +202,7 @@ const DATA_DIR = process.env.VERCEL ? '/tmp' : __dirname;
 const DB_FILE = path.join(DATA_DIR, 'anime_database.json');
 const SESSIONS_FILE = path.join(DATA_DIR, 'sessions.json');
 
-// Ensure data directory exists
+// Enhanced database management for Vercel persistence
 async function ensureDataDir() {
   if (!process.env.VERCEL) {
     try {
@@ -213,22 +213,38 @@ async function ensureDataDir() {
   }
 }
 
-// Load/Save database functions
+// Enhanced loadDatabase with Vercel environment variable support
 async function loadDatabase() {
   try {
+    // First try environment variable (for Vercel persistence)
+    if (process.env.VERCEL_ANIME_DATABASE) {
+      try {
+        const savedData = JSON.parse(process.env.VERCEL_ANIME_DATABASE);
+        slugExceptions = { ...slugExceptions, ...savedData.slugExceptions };
+        randomAnimePool = savedData.randomAnimePool || randomAnimePool;
+        apiStats = savedData.apiStats || apiStats;
+        console.log(`📊 Loaded ${Object.keys(slugExceptions).length} entries from Vercel environment`);
+        return;
+      } catch (error) {
+        console.log('❌ Failed to parse Vercel environment database, falling back to file');
+      }
+    }
+
+    // Fallback to file system
     await ensureDataDir();
     const data = await fs.readFile(DB_FILE, 'utf8');
     const savedData = JSON.parse(data);
     slugExceptions = { ...slugExceptions, ...savedData.slugExceptions };
     randomAnimePool = savedData.randomAnimePool || randomAnimePool;
     apiStats = savedData.apiStats || apiStats;
-    console.log(`📊 Loaded ${Object.keys(slugExceptions).length} entries from database`);
+    console.log(`📊 Loaded ${Object.keys(slugExceptions).length} entries from file system`);
   } catch (error) {
-    console.log('📊 Using default database (file not found)');
+    console.log('📊 Using default database (file/environment not found)');
     await saveDatabase();
   }
 }
 
+// Enhanced saveDatabase with Vercel environment variable logging
 async function saveDatabase() {
   try {
     await ensureDataDir();
@@ -238,14 +254,23 @@ async function saveDatabase() {
       apiStats,
       lastSaved: new Date().toISOString()
     };
+    
+    // Save to file system
     await fs.writeFile(DB_FILE, JSON.stringify(dataToSave, null, 2));
+    
+    // Log the database for Vercel environment variable
+    const dbString = JSON.stringify(dataToSave);
     console.log('💾 Database saved successfully');
+    console.log('📋 For Vercel persistence, add this to VERCEL_ANIME_DATABASE environment variable:');
+    console.log(dbString.substring(0, 200) + '...'); // Show first 200 chars
+    
+    return dataToSave;
   } catch (error) {
     console.error('❌ Failed to save database:', error.message);
   }
 }
 
-// Enhanced session management with IP tracking and 5-day expiration
+// Enhanced session management
 async function loadSessions() {
   try {
     await ensureDataDir();
@@ -588,44 +613,30 @@ function detectServer(url) {
   return 'Unknown Server';
 }
 
-// Clean iframe player - Only iframe, no text or buttons
+// ULTRA-FAST IFRAME PLAYER - Optimized for speed
 function generateCleanIframePlayer(url) {
   return `<!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Player</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        html, body {
-            background: #000;
-            overflow: hidden;
-            height: 100vh;
-            width: 100vw;
-        }
-        iframe {
-            width: 100vw;
-            height: 100vh;
-            border: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-        }
-    </style>
+    <style>body,html{margin:0;padding:0;overflow:hidden;background:#000}iframe{width:100vw;height:100vh;border:none;position:fixed;top:0;left:0}</style>
 </head>
 <body>
-    <iframe 
-        src="${url}" 
-        allowfullscreen 
-        allow="autoplay; fullscreen; picture-in-picture"
-        scrolling="no"
-        frameborder="0">
-    </iframe>
+    <iframe src="${url}" allow="autoplay;fullscreen" allowfullscreen loading="eager"></iframe>
+    <script>
+        // Preload optimization
+        window.addEventListener('load', function() {
+            const iframe = document.querySelector('iframe');
+            iframe.focus();
+        });
+        
+        // Mobile optimization
+        if ('ontouchstart' in window) {
+            document.body.style.webkitOverflowScrolling = 'touch';
+        }
+    </script>
 </body>
 </html>`;
 }
@@ -659,40 +670,37 @@ function generatePlayer(title, season, episode, sources, contentUrl, anilistId) 
   const primarySource = sources[0];
   
   return `<!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>${title} - S${season}E${episode}</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { 
-            background: #000;
-            color: white; 
-            font-family: 'Segoe UI', sans-serif;
-            min-height: 100vh;
-            overflow: hidden;
-        }
-        .player-container { 
-            width: 100vw; 
-            height: 100vh; 
-            position: fixed;
-            top: 0;
-            left: 0;
-        }
-        iframe { 
-            width: 100%; 
-            height: 100%; 
-            border: none; 
-            background: #000;
-        }
+        body,html{margin:0;padding:0;overflow:hidden;background:#000;color:white;font-family:'Segoe UI',sans-serif;min-height:100vh}
+        .player-container{width:100vw;height:100vh;position:fixed;top:0;left:0}
+        iframe{width:100%;height:100%;border:none;background:#000}
     </style>
 </head>
 <body>
     <div class="player-container">
-        <iframe id="player" src="${primarySource.url}" allowfullscreen 
-                allow="autoplay; fullscreen; picture-in-picture"></iframe>
+        <iframe id="player" src="${primarySource.url}" allow="autoplay;fullscreen" allowfullscreen loading="eager"></iframe>
     </div>
+    <script>
+        // Performance optimizations
+        window.addEventListener('load', function() {
+            const iframe = document.getElementById('player');
+            iframe.focus();
+            
+            // Preload next frame for smoother experience
+            setTimeout(() => {
+                const link = document.createElement('link');
+                link.rel = 'preload';
+                link.as = 'document';
+                link.href = iframe.src;
+                document.head.appendChild(link);
+            }, 1000);
+        });
+    </script>
 </body>
 </html>`;
 }
@@ -703,7 +711,7 @@ function generatePlayer(title, season, episode, sources, contentUrl, anilistId) 
 app.get('/', (req, res) => {
   res.json({
     message: '🎬 AnimeWorld API with Enhanced Admin Panel',
-    version: '3.1.0',
+    version: '3.2.0',
     status: 'active',
     endpoints: [
       {
@@ -732,7 +740,7 @@ app.get('/', (req, res) => {
   });
 });
 
-// Clean iframe endpoint
+// Clean iframe endpoint - ULTRA FAST
 app.get('/api/iframe', (req, res) => {
   const url = req.query.url;
   
@@ -740,7 +748,7 @@ app.get('/api/iframe', (req, res) => {
     return res.status(400).json({ error: 'URL parameter is required' });
   }
   
-  console.log(`🎬 CLEAN IFRAME: ${url}`);
+  console.log(`🎬 FAST IFRAME: ${url}`);
   
   const html = generateCleanIframePlayer(url);
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -1025,7 +1033,7 @@ app.get('/api/random', async (req, res) => {
 app.get('/health', (req, res) => {
   res.json({ 
     status: 'active',
-    version: '3.1.0',
+    version: '3.2.0',
     database_entries: Object.keys(slugExceptions).length,
     random_pool: randomAnimePool.length,
     total_requests: apiStats.totalRequests,
@@ -1269,6 +1277,26 @@ app.delete('/admin/anime/:id', requireAuth, async (req, res) => {
     res.json({ success: true, message: 'Anime removed from database' });
   } else {
     res.status(404).json({ error: 'Anime not found' });
+  }
+});
+
+// Export database endpoint
+app.get('/admin/export-database', requireAuth, async (req, res) => {
+  try {
+    const dataToSave = {
+      slugExceptions,
+      randomAnimePool,
+      apiStats,
+      lastSaved: new Date().toISOString()
+    };
+    
+    res.json({
+      success: true,
+      database: dataToSave,
+      message: 'Copy the database object to VERCEL_ANIME_DATABASE environment variable'
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to export database' });
   }
 });
 
@@ -1692,6 +1720,7 @@ app.get('/admin', (req, res) => {
                     <div class="tab active" onclick="switchTab('single')">📝 Single Add</div>
                     <div class="tab" onclick="switchTab('bulk')">📦 Bulk Add</div>
                     <div class="tab" onclick="switchTab('database')">📊 Database</div>
+                    <div class="tab" onclick="switchTab('export')">📤 Export</div>
                 </div>
 
                 <!-- Single Add Tab -->
@@ -1745,6 +1774,7 @@ app.get('/admin', (req, res) => {
                             <button onclick="testRandomAnime()" class="secondary">🎲 Test Random Anime</button>
                             <button onclick="refreshStats()" class="secondary">📈 Refresh Stats</button>
                             <button onclick="testAPI()" class="secondary">🔗 Test API Endpoint</button>
+                            <button onclick="exportDatabase()" class="secondary" style="margin-top: 10px;">📤 Export Database</button>
                         </div>
                     </div>
                 </div>
@@ -1801,6 +1831,20 @@ app.get('/admin', (req, res) => {
                             Loading...
                         </div>
                         <button onclick="refreshDatabase()" style="margin-top: 15px;">🔄 Refresh List</button>
+                    </div>
+                </div>
+
+                <!-- Export Tab -->
+                <div id="exportTab" class="tab-content">
+                    <div class="form-section">
+                        <h3>📤 Export Database</h3>
+                        <p>For Vercel persistence, copy the database JSON and add it as an environment variable:</p>
+                        <div class="form-group">
+                            <label>Environment Variable Name:</label>
+                            <input type="text" value="VERCEL_ANIME_DATABASE" readonly>
+                        </div>
+                        <button onclick="exportDatabase()" class="secondary">📋 Export Database JSON</button>
+                        <div id="exportResult" style="margin-top: 20px;"></div>
                     </div>
                 </div>
             </div>
@@ -2132,6 +2176,39 @@ app.get('/admin', (req, res) => {
             } catch (error) {
                 console.error('Failed to delete anime:', error);
             }
+        }
+
+        async function exportDatabase() {
+            try {
+                const response = await fetch('/admin/export-database', {
+                    headers: { 'Authorization': authToken }
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    const dbString = JSON.stringify(data.database, null, 2);
+                    document.getElementById('exportResult').innerHTML = \`
+                        <div class="message success">
+                            <strong>Database exported successfully!</strong>
+                            <p>Copy the JSON below and add it as VERCEL_ANIME_DATABASE environment variable:</p>
+                            <textarea style="width: 100%; height: 300px; margin-top: 10px; font-family: monospace; background: var(--primary); color: var(--text); border: 1px solid var(--border); padding: 10px; border-radius: 4px;">\${dbString}</textarea>
+                            <button onclick="copyToClipboard('\${dbString.replace(/'/g, "\\\\'")}')" class="secondary" style="margin-top: 10px;">📋 Copy to Clipboard</button>
+                        </div>
+                    \`;
+                }
+            } catch (error) {
+                document.getElementById('exportResult').innerHTML = \`
+                    <div class="message error">Failed to export database: \${error.message}</div>
+                \`;
+            }
+        }
+
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                alert('Database JSON copied to clipboard!');
+            }).catch(err => {
+                alert('Failed to copy: ' + err);
+            });
         }
 
         async function testRandomAnime() {

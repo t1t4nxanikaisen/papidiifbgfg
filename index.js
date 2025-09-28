@@ -3,13 +3,18 @@ import axios from 'axios';
 import * as cheerio from 'cheerio';
 import fs from 'fs/promises';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Persistent session store
-let sessions = new Set();
+// Fix for __dirname in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Enhanced session store with IP tracking and expiration
+let sessions = new Map();
 
 // Dynamic slug database
 let slugExceptions = {
@@ -76,24 +81,74 @@ async function saveDatabase() {
   }
 }
 
-// Load/Save sessions
+// Enhanced session management with IP tracking and 5-day expiration
 async function loadSessions() {
   try {
     const data = await fs.readFile('sessions.json', 'utf8');
     const savedSessions = JSON.parse(data);
-    sessions = new Set(savedSessions);
+    
+    // Filter out expired sessions
+    const now = Date.now();
+    const validSessions = new Map();
+    
+    for (const [sessionId, sessionData] of Object.entries(savedSessions)) {
+      if (now - sessionData.createdAt < 5 * 24 * 60 * 60 * 1000) { // 5 days
+        validSessions.set(sessionId, sessionData);
+      }
+    }
+    
+    sessions = validSessions;
     console.log(`🔑 Loaded ${sessions.size} active sessions`);
   } catch (error) {
     console.log('🔑 No saved sessions found');
+    sessions = new Map();
   }
 }
 
 async function saveSessions() {
   try {
-    await fs.writeFile('sessions.json', JSON.stringify([...sessions], null, 2));
+    const sessionsObject = Object.fromEntries(sessions);
+    await fs.writeFile('sessions.json', JSON.stringify(sessionsObject, null, 2));
   } catch (error) {
     console.error('❌ Failed to save sessions:', error.message);
   }
+}
+
+// Create session with IP tracking and 5-day expiration
+function createSession(ip) {
+  const sessionId = 'session_' + Date.now().toString() + Math.random().toString(36).substr(2, 9);
+  const sessionData = {
+    id: sessionId,
+    ip: ip,
+    createdAt: Date.now(),
+    expiresAt: Date.now() + (5 * 24 * 60 * 60 * 1000) // 5 days
+  };
+  
+  sessions.set(sessionId, sessionData);
+  
+  // Clean old sessions (keep only active ones)
+  cleanupSessions();
+  
+  return sessionId;
+}
+
+// Clean up expired sessions
+function cleanupSessions() {
+  const now = Date.now();
+  for (const [sessionId, sessionData] of sessions.entries()) {
+    if (now > sessionData.expiresAt) {
+      sessions.delete(sessionId);
+    }
+  }
+}
+
+// Get client IP
+function getClientIP(req) {
+  return req.ip || 
+         req.connection.remoteAddress || 
+         req.socket.remoteAddress ||
+         (req.connection.socket ? req.connection.socket.remoteAddress : null) ||
+         '127.0.0.1';
 }
 
 // Track API usage
@@ -107,10 +162,31 @@ function trackAPIUsage(success = true) {
   apiStats.lastUpdated = new Date().toISOString();
 }
 
-// Authentication middleware
+// Enhanced authentication middleware with IP checking
 function requireAuth(req, res, next) {
   const sessionId = req.headers.authorization;
-  if (sessions.has(sessionId)) {
+  const clientIP = getClientIP(req);
+  
+  if (sessionId && sessions.has(sessionId)) {
+    const sessionData = sessions.get(sessionId);
+    
+    // Check if session is expired
+    if (Date.now() > sessionData.expiresAt) {
+      sessions.delete(sessionId);
+      return res.status(401).json({ error: 'Session expired' });
+    }
+    
+    // Check if IP matches (optional, can be removed if you want multi-IP access)
+    if (sessionData.ip !== clientIP) {
+      console.log(`⚠️ IP mismatch for session: ${sessionData.ip} vs ${clientIP}`);
+      // You can choose to invalidate session here or allow it
+      // sessions.delete(sessionId);
+      // return res.status(401).json({ error: 'Session IP mismatch' });
+    }
+    
+    // Update session expiration on activity (optional)
+    sessionData.expiresAt = Date.now() + (5 * 24 * 60 * 60 * 1000);
+    
     next();
   } else {
     res.status(401).json({ error: 'Authentication required' });
@@ -350,10 +426,170 @@ function detectServer(url) {
   return 'Unknown Server';
 }
 
-// Main streaming endpoint - UPDATED to always use clean iframe
+// Clean iframe player - UPDATED: Only iframe, no text or buttons
+function generateCleanIframePlayer(url) {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Player</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        html, body {
+            background: #000;
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+        }
+        iframe {
+            width: 100vw;
+            height: 100vh;
+            border: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+        }
+    </style>
+</head>
+<body>
+    <iframe 
+        src="${url}" 
+        allowfullscreen 
+        allow="autoplay; fullscreen; picture-in-picture"
+        scrolling="no"
+        frameborder="0">
+    </iframe>
+</body>
+</html>`;
+}
+
+// Enhanced player with navigation - UPDATED: Removed all buttons and text
+function generatePlayer(title, season, episode, sources, contentUrl, anilistId) {
+  if (sources.length === 0) {
+    return `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>${title} - S${season}E${episode}</title>
+    <style>
+        body { background: #0f0f23; color: white; font-family: Arial; padding: 20px; text-align: center; }
+        .redirect { background: #1a1a2e; padding: 40px; border-radius: 10px; margin: 50px auto; max-width: 600px; }
+        .btn { display: inline-block; padding: 15px 30px; background: #667eea; color: white; text-decoration: none; border-radius: 10px; margin-top: 20px; margin-right: 10px; }
+    </style>
+</head>
+<body>
+    <div class="redirect">
+        <h1>${title}</h1>
+        <p>Season ${season} • Episode ${episode}</p>
+        <p>Content found but requires manual navigation</p>
+        <a href="${contentUrl}" class="btn" target="_blank">Open Content Page</a>
+        <a href="/admin" class="btn" style="background: #11998e;">Admin Panel</a>
+    </div>
+</body>
+</html>`;
+  }
+
+  const primarySource = sources[0];
+  
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${title} - S${season}E${episode}</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            background: #000;
+            color: white; 
+            font-family: 'Segoe UI', sans-serif;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+        .player-container { 
+            width: 100vw; 
+            height: 100vh; 
+            position: fixed;
+            top: 0;
+            left: 0;
+        }
+        iframe { 
+            width: 100%; 
+            height: 100%; 
+            border: none; 
+            background: #000;
+        }
+    </style>
+</head>
+<body>
+    <div class="player-container">
+        <iframe id="player" src="${primarySource.url}" allowfullscreen 
+                allow="autoplay; fullscreen; picture-in-picture"></iframe>
+    </div>
+</body>
+</html>`;
+}
+
+// ==================== MAIN API ROUTES ====================
+
+// Root endpoint
+app.get('/', (req, res) => {
+  res.json({
+    message: '🎬 AnimeWorld API with Enhanced Admin Panel',
+    version: '3.0.0',
+    status: 'active',
+    endpoints: [
+      {
+        method: 'GET',
+        url: '/api/anime/{anilist_id}/{season}/{episode}',
+        example: '/api/anime/101922/1/1',
+        description: 'Stream anime episode'
+      },
+      {
+        method: 'GET', 
+        url: '/api/random',
+        example: '/api/random',
+        description: 'Random anime episode'
+      },
+      {
+        method: 'GET',
+        url: '/api/iframe?url=SOURCE_URL',
+        description: 'Clean iframe player'
+      },
+      {
+        method: 'GET',
+        url: '/admin',
+        description: 'Admin panel (password: 123Admin09)'
+      }
+    ]
+  });
+});
+
+// Clean iframe endpoint
+app.get('/api/iframe', (req, res) => {
+  const url = req.query.url;
+  
+  if (!url) {
+    return res.status(400).json({ error: 'URL parameter is required' });
+  }
+  
+  console.log(`🎬 CLEAN IFRAME: ${url}`);
+  
+  const html = generateCleanIframePlayer(url);
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(html);
+});
+
+// Main streaming endpoint
 app.get('/api/anime/:anilistId/:season/:episode', async (req, res) => {
   const { anilistId, season, episode } = req.params;
   const jsonMode = req.query.json === '1';
+  const cleanMode = req.query.clean === '1';
 
   console.log(`\n🎬 STREAMING: ID ${anilistId} - S${season}E${episode}`);
   
@@ -427,14 +663,17 @@ app.get('/api/anime/:anilistId/:season/:episode', async (req, res) => {
       if (jsonMode) {
         return res.json(responseData);
       }
-// ALWAYS redirect to clean iframe when sources are found
-if (result.sources.length > 0) {
-  const primarySource = result.sources[0];
-  return res.redirect(`/api/iframe?url=${encodeURIComponent(primarySource.url)}`);
-}
 
-      // Fallback to simple message if no sources but content found
-      return res.send(`Content found at: ${result.url}`);
+      if (cleanMode && result.sources.length > 0) {
+        const primarySource = result.sources[0];
+        const html = generateCleanIframePlayer(primarySource.url);
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        return res.send(html);
+      }
+
+      const html = generatePlayer(primaryTitle, season, episode, result.sources, result.url, anilistId);
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.send(html);
 
     } else {
       // Not in database, try AniList approach
@@ -488,14 +727,16 @@ if (result.sources.length > 0) {
         return res.json(responseData);
       }
 
-      // ALWAYS redirect to clean iframe when sources are found
-      if (result.sources.length > 0) {
+      if (cleanMode && result.sources.length > 0) {
         const primarySource = result.sources[0];
-        return res.redirect(`/api/iframe?url=${encodeURIComponent(primarySource.url)}`);
+        const html = generateCleanIframePlayer(primarySource.url);
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        return res.send(html);
       }
 
-      // Fallback to simple message if no sources but content found
-      return res.send(`Content found at: ${result.url}`);
+      const html = generatePlayer(primaryTitle, season, episode, result.sources, result.url, anilistId);
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.send(html);
     }
 
   } catch (error) {
@@ -508,188 +749,103 @@ if (result.sources.length > 0) {
   }
 });
 
-// Original player (for non-clean mode)
-function generatePlayer(title, season, episode, sources, contentUrl) {
-  if (sources.length === 0) {
-    return `<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>${title} - S${season}E${episode}</title>
-    <style>
-        body { background: #0f0f23; color: white; font-family: Arial; padding: 20px; text-align: center; }
-        .redirect { background: #1a1a2e; padding: 40px; border-radius: 10px; margin: 50px auto; max-width: 600px; }
-        .btn { display: inline-block; padding: 15px 30px; background: #667eea; color: white; text-decoration: none; border-radius: 10px; margin-top: 20px; }
-    </style>
-</head>
-<body>
-    <div class="redirect">
-        <h1>${title}</h1>
-        <p>Season ${season} • Episode ${episode}</p>
-        <p>Content found but requires manual navigation</p>
-        <a href="${contentUrl}" class="btn" target="_blank">Open Content Page</a>
-    </div>
-</body>
-</html>`;
-  }
-
-  const primarySource = sources[0];
+// Random endpoint
+app.get('/api/random', async (req, res) => {
+  const jsonMode = req.query.json === '1';
+  const cleanMode = req.query.clean === '1';
   
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>${title} - S${season}E${episode}</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { 
-            background: linear-gradient(135deg, #0c0c0c, #1a1a2e);
-            color: white; 
-            font-family: 'Segoe UI', sans-serif;
-            min-height: 100vh;
-        }
-        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
-        .header {
-            text-align: center;
-            margin-bottom: 20px;
-            padding: 20px;
-            background: rgba(255,255,255,0.1);
-            border-radius: 15px;
-        }
-        .player-container { 
-            width: 100%; 
-            height: 75vh; 
-            margin-bottom: 20px;
-            border-radius: 15px;
-            overflow: hidden;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.4);
-        }
-        iframe { 
-            width: 100%; 
-            height: 100%; 
-            border: none; 
-            background: #000;
-        }
-        .servers {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            gap: 10px;
-            margin-top: 20px;
-        }
-        .server-btn {
-            padding: 12px 16px;
-            background: linear-gradient(45deg, #667eea, #764ba2);
-            border: none;
-            border-radius: 8px;
-            color: white;
-            cursor: pointer;
-            font-weight: 600;
-            transition: all 0.3s ease;
-            text-align: center;
-        }
-        .server-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
-        }
-        .server-btn.active {
-            background: linear-gradient(45deg, #f093fb, #f5576c);
-        }
-        .clean-mode-btn {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            padding: 10px 20px;
-            background: linear-gradient(45deg, #11998e, #38ef7d);
-            border: none;
-            border-radius: 25px;
-            color: white;
-            text-decoration: none;
-            font-weight: bold;
-            transition: all 0.3s ease;
-            z-index: 1000;
-        }
-        .clean-mode-btn:hover {
-            transform: scale(1.05);
-            box-shadow: 0 5px 15px rgba(17, 153, 142, 0.4);
-        }
-        .random-btn {
-            position: fixed;
-            top: 70px;
-            right: 20px;
-            padding: 10px 20px;
-            background: linear-gradient(45deg, #667eea, #764ba2);
-            border: none;
-            border-radius: 25px;
-            color: white;
-            text-decoration: none;
-            font-weight: bold;
-            transition: all 0.3s ease;
-            z-index: 1000;
-        }
-        .random-btn:hover {
-            transform: scale(1.05);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-        }
-    </style>
-</head>
-<body>
-    <a href="/api/anime/${primarySource.url.split('/').pop()}?clean=1" class="clean-mode-btn">🎬 Clean Mode</a>
-    <a href="/api/random" class="random-btn">🎲 Random Anime</a>
+  try {
+    const randomId = randomAnimePool[Math.floor(Math.random() * randomAnimePool.length)];
+    const season = 1;
+    const episode = 1;
     
-    <div class="container">
-        <div class="header">
-            <h1>${title}</h1>
-            <p>Season ${season} • Episode ${episode} • ${sources.length} Server(s)</p>
-        </div>
-        
-        <div class="player-container">
-            <iframe id="player" src="${primarySource.url}" allowfullscreen 
-                    allow="autoplay; fullscreen; picture-in-picture"></iframe>
-        </div>
-        
-        ${sources.length > 1 ? `
-        <div class="servers">
-            ${sources.map((source, i) => `
-                <button class="server-btn ${i === 0 ? 'active' : ''}" 
-                        onclick="switchServer('${source.url}', this)">
-                    ${source.server}
-                </button>
-            `).join('')}
-        </div>
-        ` : ''}
-    </div>
+    console.log(`\n🎲 RANDOM ANIME: AniList ${randomId} - S${season}E${episode}`);
+    
+    const animeInfo = await getAnimeInfo(randomId);
+    if (!animeInfo) {
+      trackAPIUsage(false);
+      return res.status(404).json({ error: 'Random anime info not found' });
+    }
 
-    <script>
-        function switchServer(url, button) {
-            document.getElementById('player').src = url;
-            document.querySelectorAll('.server-btn').forEach(btn => btn.classList.remove('active'));
-            button.classList.add('active');
-        }
-    </script>
-</body>
-</html>`;
-}
+    const primaryTitle = animeInfo.english || animeInfo.romaji;
+    const slugs = generateSlugs(animeInfo, parseInt(randomId));
+    const result = await findEpisode(slugs, season, episode, animeInfo);
+
+    if (!result) {
+      trackAPIUsage(false);
+      return res.status(404).json({ 
+        error: 'Random content not found',
+        tried_id: randomId
+      });
+    }
+
+    trackAPIUsage(true);
+    const responseData = {
+      success: true,
+      anilist_id: parseInt(randomId),
+      anime_title: primaryTitle,
+      season: season,
+      episode: episode,
+      slug: result.slug,
+      content_url: result.url,
+      sources: result.sources,
+      is_random: true
+    };
+
+    if (jsonMode) {
+      return res.json(responseData);
+    }
+
+    if (cleanMode && result.sources.length > 0) {
+      const primarySource = result.sources[0];
+      const html = generateCleanIframePlayer(primarySource.url);
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.send(html);
+    }
+
+    const html = generatePlayer(primaryTitle, season, episode, result.sources, result.url, randomId);
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    return res.send(html);
+
+  } catch (error) {
+    console.error('💥 Random error:', error.message);
+    trackAPIUsage(false);
+    res.status(500).json({ 
+      error: 'Server error', 
+      details: error.message
+    });
+  }
+});
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'active',
+    version: '3.0.0',
+    database_entries: Object.keys(slugExceptions).length,
+    random_pool: randomAnimePool.length,
+    total_requests: apiStats.totalRequests,
+    active_sessions: sessions.size
+  });
+});
 
 // ==================== ADMIN PANEL ROUTES ====================
 
-// Admin login endpoint
+// Admin login endpoint with IP tracking
 app.post('/admin/login', async (req, res) => {
   const { password } = req.body;
+  const clientIP = getClientIP(req);
   
   if (password === '123Admin09') {
-    const sessionId = 'session_' + Date.now().toString() + Math.random().toString(36).substr(2, 9);
-    sessions.add(sessionId);
-    
-    // Clean old sessions (keep last 20)
-    if (sessions.size > 20) {
-      const sessionsArray = [...sessions];
-      sessions = new Set(sessionsArray.slice(-20));
-    }
+    const sessionId = createSession(clientIP);
     
     await saveSessions();
     
-    res.json({ success: true, token: sessionId });
+    res.json({ 
+      success: true, 
+      token: sessionId,
+      message: 'Logged in successfully. Session valid for 5 days.'
+    });
   } else {
     res.status(401).json({ error: 'Invalid password' });
   }
@@ -697,7 +853,24 @@ app.post('/admin/login', async (req, res) => {
 
 // Check session endpoint
 app.get('/admin/check-session', requireAuth, (req, res) => {
-  res.json({ valid: true });
+  const sessionData = sessions.get(req.headers.authorization);
+  res.json({ 
+    valid: true, 
+    session: {
+      ip: sessionData.ip,
+      createdAt: new Date(sessionData.createdAt).toLocaleString(),
+      expiresAt: new Date(sessionData.expiresAt).toLocaleString(),
+      remainingDays: Math.ceil((sessionData.expiresAt - Date.now()) / (24 * 60 * 60 * 1000))
+    }
+  });
+});
+
+// Logout endpoint
+app.post('/admin/logout', requireAuth, async (req, res) => {
+  const sessionId = req.headers.authorization;
+  sessions.delete(sessionId);
+  await saveSessions();
+  res.json({ success: true, message: 'Logged out successfully' });
 });
 
 // Admin API endpoints
@@ -712,7 +885,8 @@ app.get('/admin/stats', requireAuth, (req, res) => {
     randomPool: randomAnimePool.length,
     totalRequests: apiStats.totalRequests,
     successfulRequests: apiStats.successfulRequests,
-    failedRequests: apiStats.failedRequests
+    failedRequests: apiStats.failedRequests,
+    activeSessions: sessions.size
   });
 });
 
@@ -887,333 +1061,6 @@ app.delete('/admin/anime/:id', requireAuth, async (req, res) => {
   }
 });
 
-// ==================== MAIN API ROUTES ====================
-
-// Root endpoint
-app.get('/', (req, res) => {
-  res.json({
-    message: '🎬 AnimeWorld API with Admin Panel',
-    version: '2.1.0',
-    status: 'active',
-    endpoints: [
-      {
-        method: 'GET',
-        url: '/api/anime/{anilist_id}/{season}/{episode}',
-        example: '/api/anime/101922/1/1',
-        description: 'Stream anime episode'
-      },
-      {
-        method: 'GET', 
-        url: '/api/random',
-        example: '/api/random',
-        description: 'Random anime episode'
-      },
-      {
-        method: 'GET',
-        url: '/admin',
-        description: 'Admin panel (password: 123Admin09)'
-      }
-    ]
-  });
-});
-
-// Clean iframe endpoint - FIXED ROUTE
-app.get('/api/iframe', (req, res) => {
-  const url = req.query.url;
-  
-  if (!url) {
-    return res.status(400).json({ error: 'URL parameter is required' });
-  }
-  
-  console.log(`🎬 CLEAN IFRAME: ${url}`);
-  
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Player</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        html, body {
-            background: #000;
-            overflow: hidden;
-            height: 100vh;
-            width: 100vw;
-        }
-        iframe {
-            width: 100vw;
-            height: 100vh;
-            border: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-        }
-    </style>
-</head>
-<body>
-    <iframe 
-        src="${url}" 
-        allowfullscreen 
-        allow="autoplay; fullscreen; picture-in-picture"
-        scrolling="no"
-        frameborder="0">
-    </iframe>
-</body>
-</html>`;
-  
-  res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.send(html);
-});
-
-// Main streaming endpoint
-app.get('/api/anime/:anilistId/:season/:episode', async (req, res) => {
-  const { anilistId, season, episode } = req.params;
-  const jsonMode = req.query.json === '1';
-  const cleanMode = req.query.clean === '1';
-
-  console.log(`\n🎬 STREAMING: ID ${anilistId} - S${season}E${episode}`);
-  
-  try {
-    // Check if this ID exists in our database first
-    const isInDatabase = slugExceptions[anilistId];
-    let animeInfo = null;
-    let primaryTitle = 'Unknown Anime';
-
-    if (isInDatabase) {
-      const dbEntry = slugExceptions[anilistId];
-      const dbSlug = dbEntry.slug;
-      const dbName = dbEntry.name;
-      
-      console.log(`🎯 Found in database: ${dbSlug}`);
-      
-      // Try to get AniList info only if it has AniList ID
-      if (dbEntry.hasAnilistId) {
-        animeInfo = await getAnimeInfo(anilistId);
-      }
-      
-      if (animeInfo) {
-        primaryTitle = animeInfo.english || animeInfo.romaji;
-        console.log(`📺 AniList info found: ${primaryTitle}`);
-      } else {
-        // Use stored name for custom entries
-        primaryTitle = dbName;
-        console.log(`📺 Custom entry: ${primaryTitle}`);
-        
-        // Create mock anime info for custom entries
-        animeInfo = {
-          english: primaryTitle,
-          romaji: primaryTitle,
-          format: 'TV'
-        };
-      }
-
-      // Use database slug directly
-      const slugs = [dbSlug];
-      console.log(`🧠 Using database slug: ${slugs}`);
-
-      // Find episode
-      console.log('🎯 Searching for content...');
-      const result = await findEpisode(slugs, season, episode, animeInfo);
-
-      if (!result) {
-        trackAPIUsage(false);
-        return res.status(404).json({ 
-          error: 'Content not found',
-          anime_title: primaryTitle,
-          tried_slugs: slugs
-        });
-      }
-
-      console.log(`🎉 SUCCESS! Found on ${result.pathType} with ${result.sources.length} sources`);
-      trackAPIUsage(true);
-
-      const responseData = {
-        success: true,
-        id: parseInt(anilistId),
-        anime_title: primaryTitle,
-        season: parseInt(season),
-        episode: parseInt(episode),
-        slug: result.slug,
-        content_url: result.url,
-        sources: result.sources,
-        from_database: true,
-        has_anilist_id: dbEntry.hasAnilistId
-      };
-
-      if (jsonMode) {
-        return res.json(responseData);
-      }
-
-      if (cleanMode && result.sources.length > 0) {
-        const primarySource = result.sources[0];
-        const html = generateCleanIframePlayer(primarySource.url);
-        res.setHeader('Content-Type', 'text/html; charset=utf-8');
-        return res.send(html);
-      }
-
-      const html = generatePlayer(primaryTitle, season, episode, result.sources, result.url);
-      res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      return res.send(html);
-
-    } else {
-      // Not in database, try AniList approach
-      console.log('📡 Not in database, fetching from AniList...');
-      animeInfo = await getAnimeInfo(anilistId);
-      
-      if (!animeInfo) {
-        trackAPIUsage(false);
-        return res.status(404).json({ 
-          error: 'Anime not found on AniList and not in custom database',
-          suggestion: 'Add this anime to the database via admin panel'
-        });
-      }
-
-      primaryTitle = animeInfo.english || animeInfo.romaji;
-      console.log(`📺 AniList Anime: ${primaryTitle}`);
-
-      // Generate slugs naturally
-      const slugs = generateSlugs(animeInfo, parseInt(anilistId));
-      console.log(`🧠 Generated slugs: ${slugs}`);
-
-      // Find episode
-      console.log('🎯 Searching for content...');
-      const result = await findEpisode(slugs, season, episode, animeInfo);
-
-      if (!result) {
-        trackAPIUsage(false);
-        return res.status(404).json({ 
-          error: 'Content not found',
-          anime_title: primaryTitle,
-          tried_slugs: slugs
-        });
-      }
-
-      console.log(`🎉 SUCCESS! Found on ${result.pathType} with ${result.sources.length} sources`);
-      trackAPIUsage(true);
-
-      const responseData = {
-        success: true,
-        anilist_id: parseInt(anilistId),
-        anime_title: primaryTitle,
-        season: parseInt(season),
-        episode: parseInt(episode),
-        slug: result.slug,
-        content_url: result.url,
-        sources: result.sources,
-        from_database: false
-      };
-
-      if (jsonMode) {
-        return res.json(responseData);
-      }
-
-      if (cleanMode && result.sources.length > 0) {
-        const primarySource = result.sources[0];
-        const html = generateCleanIframePlayer(primarySource.url);
-        res.setHeader('Content-Type', 'text/html; charset=utf-8');
-        return res.send(html);
-      }
-
-      const html = generatePlayer(primaryTitle, season, episode, result.sources, result.url);
-      res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      return res.send(html);
-    }
-
-  } catch (error) {
-    console.error('💥 Error:', error.message);
-    trackAPIUsage(false);
-    res.status(500).json({ 
-      error: 'Server error', 
-      details: error.message
-    });
-  }
-});
-
-// Random endpoint
-app.get('/api/random', async (req, res) => {
-  const jsonMode = req.query.json === '1';
-  const cleanMode = req.query.clean === '1';
-  
-  try {
-    const randomId = randomAnimePool[Math.floor(Math.random() * randomAnimePool.length)];
-    const season = 1;
-    const episode = 1;
-    
-    console.log(`\n🎲 RANDOM ANIME: AniList ${randomId} - S${season}E${episode}`);
-    
-    const animeInfo = await getAnimeInfo(randomId);
-    if (!animeInfo) {
-      trackAPIUsage(false);
-      return res.status(404).json({ error: 'Random anime info not found' });
-    }
-
-    const primaryTitle = animeInfo.english || animeInfo.romaji;
-    const slugs = generateSlugs(animeInfo, parseInt(randomId));
-    const result = await findEpisode(slugs, season, episode, animeInfo);
-
-    if (!result) {
-      trackAPIUsage(false);
-      return res.status(404).json({ 
-        error: 'Random content not found',
-        tried_id: randomId
-      });
-    }
-
-    trackAPIUsage(true);
-    const responseData = {
-      success: true,
-      anilist_id: parseInt(randomId),
-      anime_title: primaryTitle,
-      season: season,
-      episode: episode,
-      slug: result.slug,
-      content_url: result.url,
-      sources: result.sources,
-      is_random: true
-    };
-
-    if (jsonMode) {
-      return res.json(responseData);
-    }
-
-    if (cleanMode && result.sources.length > 0) {
-      const primarySource = result.sources[0];
-      const html = generateCleanIframePlayer(primarySource.url);
-      res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      return res.send(html);
-    }
-
-    const html = generatePlayer(primaryTitle, season, episode, result.sources, result.url);
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    return res.send(html);
-
-  } catch (error) {
-    console.error('💥 Random error:', error.message);
-    trackAPIUsage(false);
-    res.status(500).json({ 
-      error: 'Server error', 
-      details: error.message
-    });
-  }
-});
-
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'active',
-    version: '2.1.0',
-    database_entries: Object.keys(slugExceptions).length,
-    random_pool: randomAnimePool.length,
-    total_requests: apiStats.totalRequests,
-    active_sessions: sessions.size
-  });
-});
-
 // ==================== ADMIN PANEL HTML ====================
 
 app.get('/admin', (req, res) => {
@@ -1225,210 +1072,347 @@ app.get('/admin', (req, res) => {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AnimeWorld API - Admin Panel</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { 
-            background: linear-gradient(135deg, #0e1532, #07144c);
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            min-height: 100vh;
-            color: #fff;
+        :root {
+            --primary: #151a30;
+            --secondary: #1d233f;
+            --accent: #5865f2;
+            --accent-hover: #4752c4;
+            --success: #57f287;
+            --danger: #ed4245;
+            --warning: #faa81a;
+            --text: #ffffff;
+            --text-muted: #b9bbbe;
+            --border: #2f3136;
         }
-        .login-container {
+        
+        * { 
+            margin: 0; 
+            padding: 0; 
+            box-sizing: border-box; 
+        }
+        
+        body { 
+            background: var(--primary);
+            font-family: 'Whitney', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            min-height: 100vh;
+            color: var(--text);
+            line-height: 1.6;
+        }
+        
+        .login-container, .admin-container {
             display: flex;
             justify-content: center;
             align-items: center;
             min-height: 100vh;
+            padding: 20px;
         }
+        
         .login-box, .admin-panel {
-            background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
-            border-radius: 20px;
-            padding: 40px;
+            background: var(--secondary);
+            border-radius: 8px;
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            max-width: 1400px;
-            width: 95%;
+            border: 1px solid var(--border);
+            width: 100%;
+            max-width: 1200px;
         }
+        
         .login-box {
             max-width: 400px;
+            padding: 40px;
             text-align: center;
         }
+        
         .logo {
             font-size: 2.5em;
             margin-bottom: 10px;
             font-weight: bold;
-            background: linear-gradient(45deg, #667eea, #764ba2);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
         }
+        
         .subtitle {
-            color: rgba(255, 255, 255, 0.8);
+            color: var(--text-muted);
             margin-bottom: 30px;
             font-size: 1.1em;
         }
+        
         input, select, button, textarea {
             width: 100%;
-            padding: 15px;
-            margin: 10px 0;
-            border: none;
-            border-radius: 10px;
+            padding: 12px 16px;
+            margin: 8px 0;
+            border: 1px solid var(--border);
+            border-radius: 3px;
             font-size: 16px;
-            background: rgba(255, 255, 255, 0.1);
-            color: white;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            transition: all 0.3s ease;
+            background: var(--primary);
+            color: var(--text);
+            transition: all 0.2s ease;
         }
-        input::placeholder, textarea::placeholder { color: rgba(255, 255, 255, 0.6); }
+        
+        input:focus, select:focus, textarea:focus {
+            border-color: var(--accent);
+            outline: none;
+        }
+        
+        input::placeholder, textarea::placeholder {
+            color: var(--text-muted);
+        }
+        
         button {
-            background: linear-gradient(45deg, #667eea, #764ba2);
+            background: var(--accent);
+            border: none;
             cursor: pointer;
-            font-weight: bold;
-            text-transform: uppercase;
+            font-weight: 600;
+            transition: background 0.2s ease;
         }
-        button:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4); }
-        button.secondary { background: linear-gradient(45deg, #11998e, #38ef7d); }
-        button.warning { background: linear-gradient(45deg, #f093fb, #f5576c); }
+        
+        button:hover {
+            background: var(--accent-hover);
+        }
+        
+        button.secondary {
+            background: var(--success);
+        }
+        
+        button.secondary:hover {
+            background: #48d874;
+        }
+        
+        button.danger {
+            background: var(--danger);
+        }
+        
+        button.danger:hover {
+            background: #c03537;
+        }
+        
         .admin-header {
+            background: var(--primary);
+            padding: 20px 30px;
+            border-bottom: 1px solid var(--border);
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 30px;
-            padding-bottom: 20px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
         }
-        .stats {
+        
+        .admin-content {
+            padding: 30px;
+        }
+        
+        .stats-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 20px;
             margin-bottom: 30px;
         }
+        
         .stat-card {
-            background: rgba(255, 255, 255, 0.1);
+            background: var(--primary);
             padding: 20px;
-            border-radius: 15px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
             text-align: center;
         }
-        .stat-number { font-size: 2em; font-weight: bold; color: #667eea; }
+        
+        .stat-number {
+            font-size: 2em;
+            font-weight: bold;
+            color: var(--accent);
+            margin-bottom: 5px;
+        }
+        
         .tabs {
             display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-            padding-bottom: 10px;
+            gap: 5px;
+            margin-bottom: 25px;
+            background: var(--primary);
+            padding: 5px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
         }
+        
         .tab {
-            padding: 10px 20px;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 8px;
+            flex: 1;
+            padding: 12px 20px;
+            text-align: center;
             cursor: pointer;
-            transition: all 0.3s ease;
+            border-radius: 4px;
+            transition: background 0.2s ease;
+            font-weight: 600;
         }
+        
         .tab.active {
-            background: linear-gradient(45deg, #667eea, #764ba2);
+            background: var(--accent);
         }
+        
         .tab-content {
             display: none;
         }
+        
         .tab-content.active {
             display: block;
         }
-        .sections {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 30px;
-        }
-        .section {
-            background: rgba(255, 255, 255, 0.05);
+        
+        .form-section {
+            background: var(--primary);
             padding: 25px;
-            border-radius: 15px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        .section h3 {
+            border-radius: 6px;
+            border: 1px solid var(--border);
             margin-bottom: 20px;
-            color: #667eea;
+        }
+        
+        .form-section h3 {
+            margin-bottom: 20px;
+            color: var(--accent);
             font-size: 1.3em;
         }
+        
         .form-group {
             margin-bottom: 15px;
         }
+        
         .form-group label {
             display: block;
             margin-bottom: 5px;
-            color: rgba(255, 255, 255, 0.9);
+            color: var(--text);
+            font-weight: 600;
         }
+        
         .checkbox-group {
             display: flex;
             align-items: center;
             gap: 10px;
         }
+        
         .checkbox-group input[type="checkbox"] {
             width: auto;
         }
+        
         .anime-list {
-            max-height: 400px;
+            max-height: 500px;
             overflow-y: auto;
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 10px;
-            padding: 15px;
+            background: var(--primary);
+            border-radius: 6px;
+            border: 1px solid var(--border);
         }
+        
         .anime-item {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 10px;
+            padding: 15px 20px;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .anime-item:last-child {
+            border-bottom: none;
+        }
+        
+        .anime-info {
+            flex: 1;
+        }
+        
+        .anime-id {
+            color: var(--accent);
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+        
+        .anime-name {
+            color: var(--text);
+            font-weight: 600;
             margin: 5px 0;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 8px;
         }
-        .anime-info { flex: 1; }
-        .anime-id { color: #667eea; font-weight: bold; }
-        .anime-slug { color: rgba(255, 255, 255, 0.8); font-size: 0.9em; }
-        .anime-type { 
-            background: rgba(102, 126, 234, 0.3); 
-            padding: 2px 6px; 
-            border-radius: 4px; 
-            font-size: 0.8em; 
-            margin-left: 5px; 
+        
+        .anime-slug {
+            color: var(--text-muted);
+            font-size: 0.9em;
         }
+        
+        .anime-type {
+            background: var(--accent);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            margin-left: 8px;
+        }
+        
         .delete-btn {
-            background: linear-gradient(45deg, #ff6b6b, #ee5a24);
+            background: var(--danger);
             color: white;
             border: none;
-            padding: 8px 15px;
-            border-radius: 5px;
+            padding: 8px 16px;
+            border-radius: 3px;
             cursor: pointer;
             font-size: 12px;
             width: auto;
             margin: 0;
         }
-        .success { background: linear-gradient(45deg, #11998e, #38ef7d); }
-        .error { background: linear-gradient(45deg, #ff6b6b, #ee5a24); }
-        .warning { background: linear-gradient(45deg, #f093fb, #f5576c); }
+        
         .message {
-            padding: 15px;
-            border-radius: 10px;
+            padding: 12px 16px;
+            border-radius: 4px;
             margin: 15px 0;
-            text-align: center;
-            font-weight: bold;
+            font-weight: 600;
         }
+        
+        .message.success {
+            background: rgba(87, 242, 135, 0.1);
+            border: 1px solid var(--success);
+            color: var(--success);
+        }
+        
+        .message.error {
+            background: rgba(237, 66, 69, 0.1);
+            border: 1px solid var(--danger);
+            color: var(--danger);
+        }
+        
         .bulk-results {
             max-height: 300px;
             overflow-y: auto;
             margin: 15px 0;
-            background: rgba(0, 0, 0, 0.2);
-            border-radius: 10px;
+            background: var(--primary);
+            border-radius: 6px;
+            border: 1px solid var(--border);
             padding: 15px;
         }
+        
         .bulk-item {
             display: flex;
             justify-content: space-between;
             align-items: center;
             padding: 10px;
             margin: 5px 0;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 8px;
+            background: var(--secondary);
+            border-radius: 4px;
         }
+        
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        
+        .session-info {
+            background: var(--primary);
+            padding: 15px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            margin-bottom: 20px;
+            font-size: 0.9em;
+        }
+        
+        .session-info strong {
+            color: var(--accent);
+        }
+        
         @media (max-width: 768px) {
-            .sections { grid-template-columns: 1fr; }
+            .grid-2 {
+                grid-template-columns: 1fr;
+            }
+            
+            .stats-grid {
+                grid-template-columns: 1fr 1fr;
+            }
         }
     </style>
 </head>
@@ -1439,7 +1423,7 @@ app.get('/admin', (req, res) => {
             <div class="logo">🎬 AnimeWorld API</div>
             <div class="subtitle">Admin Panel Access</div>
             <form id="loginForm">
-                <input type="password" id="password" placeholder="Admin Password" required>
+                <input type="password" id="password" placeholder="Enter admin password" required>
                 <button type="submit">Login to Admin Panel</button>
             </form>
             <div id="loginMessage"></div>
@@ -1447,139 +1431,149 @@ app.get('/admin', (req, res) => {
     </div>
 
     <!-- Admin Panel -->
-    <div id="adminPanel" class="login-container" style="display: none;">
+    <div id="adminPanel" class="admin-container" style="display: none;">
         <div class="admin-panel">
             <div class="admin-header">
                 <div>
                     <h1>🎬 AnimeWorld API Admin Panel</h1>
-                    <p>Manage anime database with custom IDs and bulk operations</p>
+                    <p style="color: var(--text-muted);">Manage anime database with custom IDs and bulk operations</p>
                 </div>
-                <button onclick="logout()" style="width: auto; padding: 10px 20px;">Logout</button>
-            </div>
-
-            <div class="stats">
-                <div class="stat-card">
-                    <div class="stat-number" id="totalAnime">0</div>
-                    <div>Total Anime</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number" id="successRate">0%</div>
-                    <div>Success Rate</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number" id="randomPool">0</div>
-                    <div>Random Pool</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-number" id="totalRequests">0</div>
-                    <div>Total Requests</div>
+                <div>
+                    <button onclick="logout()" style="width: auto; padding: 10px 20px; margin-left: 10px;">Logout</button>
                 </div>
             </div>
 
-            <div class="tabs">
-                <div class="tab active" onclick="switchTab('single')">📝 Single Add</div>
-                <div class="tab" onclick="switchTab('bulk')">📦 Bulk Add</div>
-                <div class="tab" onclick="switchTab('database')">📊 Database</div>
-            </div>
+            <div class="admin-content">
+                <div class="session-info" id="sessionInfo" style="display: none;">
+                    <strong>Session Info:</strong> 
+                    <span id="sessionDetails">Loading...</span>
+                </div>
 
-            <!-- Single Add Tab -->
-            <div id="singleTab" class="tab-content active">
-                <div class="sections">
-                    <div class="section">
-                        <h3>📝 Add Single Anime</h3>
-                        <form id="addAnimeForm">
-                            <div class="form-group">
-                                <label>Anime Name</label>
-                                <input type="text" id="animeName" placeholder="e.g., Bleach: Thousand Year Blood War" required>
-                            </div>
-                            
-                            <div class="form-group">
-                                <div class="checkbox-group">
-                                    <input type="checkbox" id="hasAnilistId" checked onchange="toggleIdInput()">
-                                    <label for="hasAnilistId">Use AniList ID</label>
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-number" id="totalAnime">0</div>
+                        <div>Total Anime</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="successRate">0%</div>
+                        <div>Success Rate</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="randomPool">0</div>
+                        <div>Random Pool</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="totalRequests">0</div>
+                        <div>Total Requests</div>
+                    </div>
+                </div>
+
+                <div class="tabs">
+                    <div class="tab active" onclick="switchTab('single')">📝 Single Add</div>
+                    <div class="tab" onclick="switchTab('bulk')">📦 Bulk Add</div>
+                    <div class="tab" onclick="switchTab('database')">📊 Database</div>
+                </div>
+
+                <!-- Single Add Tab -->
+                <div id="singleTab" class="tab-content active">
+                    <div class="grid-2">
+                        <div class="form-section">
+                            <h3>📝 Add Single Anime</h3>
+                            <form id="addAnimeForm">
+                                <div class="form-group">
+                                    <label>Anime Name</label>
+                                    <input type="text" id="animeName" placeholder="e.g., Bleach: Thousand Year Blood War" required>
                                 </div>
-                            </div>
-                            
-                            <div class="form-group" id="anilistGroup">
-                                <label>AniList ID</label>
-                                <input type="number" id="anilistId" placeholder="e.g., 41467">
-                            </div>
-                            
-                            <div class="form-group" id="customIdGroup" style="display: none;">
-                                <label>Custom ID (for internal use)</label>
-                                <input type="number" id="customId" placeholder="e.g., 999001">
-                            </div>
-                            
-                            <div class="form-group">
-                                <label>Anime URL Slug</label>
-                                <input type="text" id="animeSlug" placeholder="e.g., bleach-thousand-year-blood-war" required>
-                            </div>
-                            
-                            <button type="submit">Add to Database</button>
-                        </form>
-                        <div id="addMessage"></div>
-                    </div>
+                                
+                                <div class="form-group">
+                                    <div class="checkbox-group">
+                                        <input type="checkbox" id="hasAnilistId" checked onchange="toggleIdInput()">
+                                        <label for="hasAnilistId">Use AniList ID</label>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-group" id="anilistGroup">
+                                    <label>AniList ID</label>
+                                    <input type="number" id="anilistId" placeholder="e.g., 41467">
+                                </div>
+                                
+                                <div class="form-group" id="customIdGroup" style="display: none;">
+                                    <label>Custom ID (for internal use)</label>
+                                    <input type="number" id="customId" placeholder="e.g., 999001">
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label>Anime URL Slug</label>
+                                    <input type="text" id="animeSlug" placeholder="e.g., bleach-thousand-year-blood-war" required>
+                                </div>
+                                
+                                <button type="submit">Add to Database</button>
+                            </form>
+                            <div id="addMessage"></div>
+                        </div>
 
-                    <div class="section">
-                        <h3>💡 Quick Actions</h3>
-                        <button onclick="testRandomAnime()" class="secondary">🎲 Test Random Anime</button>
-                        <button onclick="refreshStats()" class="secondary">📈 Refresh Stats</button>
+                        <div class="form-section">
+                            <h3>💡 Quick Actions</h3>
+                            <button onclick="testRandomAnime()" class="secondary">🎲 Test Random Anime</button>
+                            <button onclick="refreshStats()" class="secondary">📈 Refresh Stats</button>
+                            <button onclick="testAPI()" class="secondary">🔗 Test API Endpoint</button>
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- Bulk Add Tab -->
-            <div id="bulkTab" class="tab-content">
-                <div class="sections">
-                    <div class="section">
-                        <h3>📦 Bulk Add Anime</h3>
-                        <div class="form-group">
-                            <label>AniList IDs (one per line)</label>
-                            <textarea id="bulkIds" placeholder="Enter AniList IDs, one per line:
+                <!-- Bulk Add Tab -->
+                <div id="bulkTab" class="tab-content">
+                    <div class="grid-2">
+                        <div class="form-section">
+                            <h3>📦 Bulk Add Anime</h3>
+                            <div class="form-group">
+                                <label>AniList IDs (one per line)</label>
+                                <textarea id="bulkIds" placeholder="Enter AniList IDs, one per line:
 20
 21
 16498
 113415" rows="10"></textarea>
+                            </div>
+                            <button onclick="fetchBulkAnimeInfo()" class="secondary">🔍 Fetch Anime Info</button>
+                            
+                            <div id="bulkResults" class="bulk-results" style="display: none;">
+                                <h4>Fetched Anime:</h4>
+                                <div id="bulkAnimeList"></div>
+                                <button onclick="addBulkAnime()" class="secondary" style="margin-top: 15px;">✅ Add All to Database</button>
+                            </div>
                         </div>
-                        <button onclick="fetchBulkAnimeInfo()" class="secondary">🔍 Fetch Anime Info</button>
-                        
-                        <div id="bulkResults" class="bulk-results" style="display: none;">
-                            <h4>Fetched Anime:</h4>
-                            <div id="bulkAnimeList"></div>
-                            <button onclick="addBulkAnime()" class="secondary" style="margin-top: 15px;">✅ Add All to Database</button>
-                        </div>
-                    </div>
 
-                    <div class="section">
-                        <h3>⚡ Quick Bulk Actions</h3>
-                        <button onclick="addPopularAnime()" class="secondary">Add Popular Anime</button>
-                        <button onclick="clearBulkForm()" class="warning">Clear Form</button>
-                        
-                        <div style="margin-top: 20px;">
-                            <h4>Popular Anime IDs:</h4>
-                            <div style="font-size: 0.9em; color: rgba(255,255,255,0.7);">
-                                <div>20 - Naruto</div>
-                                <div>21 - One Piece</div>
-                                <div>16498 - Attack on Titan</div>
-                                <div>113415 - Jujutsu Kaisen</div>
-                                <div>101922 - Demon Slayer</div>
-                                <div>11061 - Hunter x Hunter</div>
-                                <div>1535 - Death Note</div>
-                                <div>21087 - One Punch Man</div>
+                        <div class="form-section">
+                            <h3>⚡ Quick Bulk Actions</h3>
+                            <button onclick="addPopularAnime()" class="secondary">Add Popular Anime</button>
+                            <button onclick="clearBulkForm()" class="danger">Clear Form</button>
+                            
+                            <div style="margin-top: 20px;">
+                                <h4>Popular Anime IDs:</h4>
+                                <div style="font-size: 0.9em; color: var(--text-muted);">
+                                    <div>20 - Naruto</div>
+                                    <div>21 - One Piece</div>
+                                    <div>16498 - Attack on Titan</div>
+                                    <div>113415 - Jujutsu Kaisen</div>
+                                    <div>101922 - Demon Slayer</div>
+                                    <div>11061 - Hunter x Hunter</div>
+                                    <div>1535 - Death Note</div>
+                                    <div>21087 - One Punch Man</div>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- Database Tab -->
-            <div id="databaseTab" class="tab-content">
-                <div class="section">
-                    <h3>📊 Current Database (<span id="dbCount">0</span> entries)</h3>
-                    <div class="anime-list" id="animeList">
-                        Loading...
+                <!-- Database Tab -->
+                <div id="databaseTab" class="tab-content">
+                    <div class="form-section">
+                        <h3>📊 Current Database (<span id="dbCount">0</span> entries)</h3>
+                        <div class="anime-list" id="animeList">
+                            Loading...
+                        </div>
+                        <button onclick="refreshDatabase()" style="margin-top: 15px;">🔄 Refresh List</button>
                     </div>
-                    <button onclick="refreshDatabase()" style="margin-top: 15px;">🔄 Refresh List</button>
                 </div>
             </div>
         </div>
@@ -1594,7 +1588,7 @@ app.get('/admin', (req, res) => {
             checkSession();
         }
 
-        // Check session validity
+        // Check session validity and show session info
         async function checkSession() {
             try {
                 const response = await fetch('/admin/check-session', {
@@ -1602,7 +1596,9 @@ app.get('/admin', (req, res) => {
                 });
                 
                 if (response.ok) {
+                    const data = await response.json();
                     showAdminPanel();
+                    showSessionInfo(data.session);
                 } else {
                     localStorage.removeItem('adminToken');
                     authToken = '';
@@ -1618,6 +1614,19 @@ app.get('/admin', (req, res) => {
             document.getElementById('adminPanel').style.display = 'flex';
             loadStats();
             refreshDatabase();
+        }
+
+        function showSessionInfo(session) {
+            const sessionInfo = document.getElementById('sessionInfo');
+            const sessionDetails = document.getElementById('sessionDetails');
+            
+            sessionDetails.innerHTML = \`
+                IP: \${session.ip} | 
+                Created: \${session.createdAt} | 
+                Expires: \${session.expiresAt} | 
+                Remaining: \${session.remainingDays} days
+            \`;
+            sessionInfo.style.display = 'block';
         }
 
         // Tab management
@@ -1654,6 +1663,7 @@ app.get('/admin', (req, res) => {
                     authToken = data.token;
                     localStorage.setItem('adminToken', authToken);
                     showAdminPanel();
+                    showMessage('loginMessage', data.message, 'success');
                 } else {
                     showMessage('loginMessage', data.error, 'error');
                 }
@@ -1753,9 +1763,9 @@ app.get('/admin', (req, res) => {
                 <div class="bulk-item">
                     <div>
                         <strong>\${anime.name}</strong>
-                        <div style="font-size: 0.9em; color: rgba(255,255,255,0.7);">
+                        <div style="font-size: 0.9em; color: var(--text-muted);">
                             ID: \${anime.id} • Slug: \${anime.slug}
-                            \${anime.success ? '<span style="color: #38ef7d;">✓</span>' : '<span style="color: #ff6b6b;">✗ ' + anime.error + '</span>'}
+                            \${anime.success ? '<span style="color: var(--success);">✓</span>' : '<span style="color: var(--danger);">✗ ' + anime.error + '</span>'}
                         </div>
                     </div>
                 </div>
@@ -1856,7 +1866,7 @@ app.get('/admin', (req, res) => {
                     item.innerHTML = \`
                         <div class="anime-info">
                             <div class="anime-id">ID: \${entry.id}</div>
-                            <div style="color: #38ef7d; font-weight: bold;">
+                            <div class="anime-name">
                                 \${displayName}
                                 <span class="anime-type">\${type}</span>
                             </div>
@@ -1906,23 +1916,50 @@ app.get('/admin', (req, res) => {
             }
         }
 
+        async function testAPI() {
+            try {
+                const response = await fetch('/health');
+                const data = await response.json();
+                showMessage('addMessage', \`API Status: \${data.status} - \${data.database_entries} anime in database\`, 'success');
+            } catch (error) {
+                showMessage('addMessage', 'API test failed', 'error');
+            }
+        }
+
         async function refreshStats() {
             await loadStats();
             showMessage('addMessage', 'Stats updated!', 'success');
+        }
+
+        async function logout() {
+            try {
+                const response = await fetch('/admin/logout', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': authToken
+                    }
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    showMessage('addMessage', 'Logged out successfully', 'success');
+                }
+            } catch (error) {
+                console.error('Logout error:', error);
+            }
+            
+            authToken = '';
+            localStorage.removeItem('adminToken');
+            document.getElementById('login').style.display = 'flex';
+            document.getElementById('adminPanel').style.display = 'none';
+            document.getElementById('password').value = '';
         }
 
         function showMessage(elementId, message, type) {
             const element = document.getElementById(elementId);
             element.innerHTML = \`<div class="message \${type}">\${message}</div>\`;
             setTimeout(() => element.innerHTML = '', 5000);
-        }
-
-        function logout() {
-            authToken = '';
-            localStorage.removeItem('adminToken');
-            document.getElementById('login').style.display = 'flex';
-            document.getElementById('adminPanel').style.display = 'none';
-            document.getElementById('password').value = '';
         }
 
         // Initialize
@@ -1947,7 +1984,9 @@ async function startServer() {
 📊 Database: ${Object.keys(slugExceptions).length} anime
 🎲 Random Pool: ${randomAnimePool.length} anime
 🔑 Active Sessions: ${sessions.size}
+⏰ Session Duration: 5 days
 🔗 Admin: http://localhost:${PORT}/admin
+🔗 API: http://localhost:${PORT}/api/anime/101922/1/1
 ───────────────────────────────────────────
       `);
     });

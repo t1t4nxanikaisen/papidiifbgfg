@@ -1,0 +1,713 @@
+{
+  "slugExceptions": {
+    "20": {
+      "slug": "naruto",
+      "name": "Naruto",
+      "hasAnilistId": true
+    },
+    "21": {
+      "slug": "one-piece",
+      "name": "One Piece",
+      "hasAnilistId": true
+    },
+    "74": {
+      "slug": "gakuen-alice",
+      "name": "Gakuen Alice",
+      "hasAnilistId": true
+    },
+    "75": {
+      "slug": "fafner",
+      "name": "Fafner",
+      "hasAnilistId": true
+    },
+    "76": {
+      "slug": "magical-girl-lyrical-nanoha",
+      "name": "Magical Girl Lyrical Nanoha",
+      "hasAnilistId": true
+    },
+    "77": {
+      "slug": "magical-girl-lyrical-nanoha-as",
+      "name": "Magical Girl Lyrical Nanoha A's",
+      "hasAnilistId": true
+    },
+    "79": {
+      "slug": "shuffle",
+      "name": "SHUFFLE!",
+      "hasAnilistId": true
+    },
+    "80": {
+      "slug": "mobile-suit-gundam",
+      "name": "Mobile Suit Gundam",
+      "hasAnilistId": true
+    },
+    "81": {
+      "slug": "mobile-suit-gundam-the-08th-ms-team",
+      "name": "Mobile Suit Gundam: The 08th MS Team",
+      "hasAnilistId": true
+    },
+    "82": {
+      "slug": "mobile-suit-gundam-0080-war-in-the-pocket",
+      "name": "Mobile Suit Gundam 0080: War in the Pocket",
+      "hasAnilistId": true
+    },
+    "83": {
+      "slug": "mobile-suit-gundam-the-08th-ms-team-millers-report",
+      "name": "Mobile Suit Gundam: The 08th MS Team - Miller's Report",
+      "hasAnilistId": true
+    },
+    "84": {
+      "slug": "mobile-suit-gundam-0083-stardust-memory",
+      "name": "Mobile Suit Gundam 0083: Stardust Memory",
+      "hasAnilistId": true
+    },
+    "85": {
+      "slug": "mobile-suit-zeta-gundam",
+      "name": "Mobile Suit Zeta Gundam",
+      "hasAnilistId": true
+    },
+    "86": {
+      "slug": "mobile-suit-gundam-zz",
+      "name": "Mobile Suit Gundam ZZ",
+      "hasAnilistId": true
+    },
+    "87": {
+      "slug": "mobile-suit-gundam-chars-counterattack",
+      "name": "Mobile Suit Gundam: Char's Counterattack",
+      "hasAnilistId": true
+    },
+    "88": {
+      "slug": "mobile-suit-gundam-f91",
+      "name": "Mobile Suit Gundam F91",
+      "hasAnilistId": true
+    },
+    "89": {
+      "slug": "mobile-suit-victory-gundam",
+      "name": "Mobile Suit Victory Gundam",
+      "hasAnilistId": true
+    },
+    "90": {
+      "slug": "mobile-suit-gundam-wing",
+      "name": "Mobile Suit Gundam Wing",
+      "hasAnilistId": true
+    },
+    "91": {
+      "slug": "mobile-suit-gundam-wing-endless-waltz",
+      "name": "Mobile Suit Gundam Wing: Endless Waltz",
+      "hasAnilistId": true
+    },
+    "92": {
+      "slug": "after-war-gundam-x",
+      "name": "After War Gundam X",
+      "hasAnilistId": true
+    },
+    "136": {
+      "slug": "hunter-x-hunter",
+      "name": "Hunter x Hunter",
+      "hasAnilistId": true
+    },
+    "269": {
+      "slug": "bleach",
+      "name": "Bleach",
+      "hasAnilistId": true
+    },
+    "1258": {
+      "slug": "saint-seiya-the-heated-battle-of-the-gods",
+      "name": "Saint Seiya: The Heated Battle of the Gods",
+      "hasAnilistId": true
+    },
+    "1259": {
+      "slug": "saint-seiya-the-heaven-chapter-overture",
+      "name": "Saint Seiya: The Heaven Chapter - Overture",
+      "hasAnilistId": true
+    },
+    "1260": {
+      "slug": "saint-seiya-warriors-of-the-final-holy-battle",
+      "name": "Saint Seiya: Warriors of the Final Holy Battle",
+      "hasAnilistId": true
+    },
+    "1261": {
+      "slug": "samurai-pizza-cats",
+      "name": "Samurai Pizza Cats",
+      "hasAnilistId": true
+    },
+    "1262": {
+      "slug": "the-super-dimension-fortress-macross-ii-lovers-again",
+      "name": "The Super Dimension Fortress Macross II: Lovers Again",
+      "hasAnilistId": true
+    },
+    "1263": {
+      "slug": "wet-summer-days",
+      "name": "Wet Summer Days",
+      "hasAnilistId": true
+    },
+    "1264": {
+      "slug": "ronin-warriors",
+      "name": "Ronin Warriors",
+      "hasAnilistId": true
+    },
+    "1265": {
+      "slug": "ronin-warriors-gaiden",
+      "name": "Ronin Warriors Gaiden",
+      "hasAnilistId": true
+    },
+    "1535": {
+      "slug": "death-note",
+      "name": "Death Note",
+      "hasAnilistId": true
+    },
+    "1575": {
+      "slug": "code-geass-lelouch-of-the-rebellion",
+      "name": "Code Geass: Lelouch of the Rebellion",
+      "hasAnilistId": true
+    },
+    "1735": {
+      "slug": "naruto-shippuden",
+      "name": "Naruto Shippuden",
+      "hasAnilistId": true
+    },
+    "2561": {
+      "slug": "captain-future",
+      "name": "Captain Future",
+      "hasAnilistId": true
+    },
+    "2562": {
+      "slug": "shion-no-ou-the-flowers-of-hard-blood",
+      "name": "Shion no Ou: The Flowers of Hard Blood",
+      "hasAnilistId": true
+    },
+    "2563": {
+      "slug": "aria-the-ova-arietta",
+      "name": "ARIA The OVA ~ARIETTA~",
+      "hasAnilistId": true
+    },
+    "2564": {
+      "slug": "code-e",
+      "name": "CODE-E",
+      "hasAnilistId": true
+    },
+    "2565": {
+      "slug": "jungle-taitei-susume-leo",
+      "name": "Jungle Taitei: Susume Leo!",
+      "hasAnilistId": true
+    },
+    "2566": {
+      "slug": "taro-the-space-alien",
+      "name": "Taro the Space Alien",
+      "hasAnilistId": true
+    },
+    "2567": {
+      "slug": "pinocchio-yori-piccolino-no-bouken",
+      "name": "Pinocchio yori Piccolino no Bouken",
+      "hasAnilistId": true
+    },
+    "2568": {
+      "slug": "fortunate-fawn",
+      "name": "Fortunate Fawn",
+      "hasAnilistId": true
+    },
+    "2569": {
+      "slug": "the-jungle-book",
+      "name": "The Jungle Book",
+      "hasAnilistId": true
+    },
+    "2570": {
+      "slug": "the-mischevious-twins",
+      "name": "The Mischevious Twins",
+      "hasAnilistId": true
+    },
+    "2571": {
+      "slug": "maya-the-bee",
+      "name": "Maya the Bee",
+      "hasAnilistId": true
+    },
+    "2572": {
+      "slug": "alice-in-wonderland",
+      "name": "Alice in Wonderland",
+      "hasAnilistId": true
+    },
+    "2573": {
+      "slug": "lucy-may-of-the-southern-rainbow",
+      "name": "Lucy-May of the Southern Rainbow",
+      "hasAnilistId": true
+    },
+    "2574": {
+      "slug": "kashi-no-ki-mokku",
+      "name": "Kashi no Ki Mokku",
+      "hasAnilistId": true
+    },
+    "2575": {
+      "slug": "don-chuck-stories",
+      "name": "Don Chuck Stories",
+      "hasAnilistId": true
+    },
+    "2576": {
+      "slug": "raccoon-rascal",
+      "name": "Raccoon Rascal",
+      "hasAnilistId": true
+    },
+    "4264": {
+      "slug": "ultraviolet-code-044",
+      "name": "Ultraviolet: Code 044",
+      "hasAnilistId": true
+    },
+    "4898": {
+      "slug": "black-butler",
+      "name": "Black Butler",
+      "hasAnilistId": true
+    },
+    "5039": {
+      "slug": "kurozuka",
+      "name": "Kurozuka",
+      "hasAnilistId": true
+    },
+    "5041": {
+      "slug": "guin-saga",
+      "name": "Guin Saga",
+      "hasAnilistId": true
+    },
+    "5505": {
+      "slug": "vipers-creed",
+      "name": "Viper's Creed",
+      "hasAnilistId": true
+    },
+    "5507": {
+      "slug": "valkyria-chronicles",
+      "name": "Valkyria Chronicles",
+      "hasAnilistId": true
+    },
+    "6702": {
+      "slug": "fairy-tail",
+      "name": "Fairy Tail",
+      "hasAnilistId": true
+    },
+    "11061": {
+      "slug": "hunter-x-hunter-2011",
+      "name": "Hunter x Hunter (2011)",
+      "hasAnilistId": true
+    },
+    "16498": {
+      "slug": "attack-on-titan",
+      "name": "Attack on Titan",
+      "hasAnilistId": true
+    },
+    "20776": {
+      "slug": "ghost-in-the-shell-arise-specials",
+      "name": "Ghost in the Shell: Arise Specials",
+      "hasAnilistId": true
+    },
+    "20832": {
+      "slug": "overlord",
+      "name": "Overlord",
+      "hasAnilistId": true
+    },
+    "21049": {
+      "slug": "relife",
+      "name": "ReLIFE",
+      "hasAnilistId": true
+    },
+    "21087": {
+      "slug": "one-punch-man",
+      "name": "One Punch Man",
+      "hasAnilistId": true
+    },
+    "21355": {
+      "slug": "rezero-starting-life-in-another-world",
+      "name": "Re:ZERO -Starting Life in Another World-",
+      "hasAnilistId": true
+    },
+    "21507": {
+      "slug": "mob-psycho-100",
+      "name": "Mob Psycho 100",
+      "hasAnilistId": true
+    },
+    "25777": {
+      "slug": "attack-on-titan",
+      "name": "Attack on Titan Season 2",
+      "hasAnilistId": true
+    },
+    "35760": {
+      "slug": "attack-on-titan",
+      "name": "Attack on Titan Season 3",
+      "hasAnilistId": true
+    },
+    "41467": {
+      "slug": "bleach-thousand-year-blood-war",
+      "name": "Bleach: Thousand-Year Blood War",
+      "hasAnilistId": true
+    },
+    "97940": {
+      "slug": "black-clover",
+      "name": "Black Clover",
+      "hasAnilistId": true
+    },
+    "98659": {
+      "slug": "classroom-of-the-elite",
+      "name": "Classroom of the Elite",
+      "hasAnilistId": true
+    },
+    "101024": {
+      "slug": "radiant",
+      "name": "RADIANT",
+      "hasAnilistId": true
+    },
+    "101348": {
+      "slug": "vinland-saga",
+      "name": "Vinland Saga",
+      "hasAnilistId": true
+    },
+    "101921": {
+      "slug": "kaguya-sama-love-is-war",
+      "name": "Kaguya-sama: Love is War",
+      "hasAnilistId": true
+    },
+    "101922": {
+      "slug": "demon-slayer",
+      "name": "Demon Slayer",
+      "hasAnilistId": true
+    },
+    "108463": {
+      "slug": "toilet-bound-hanako-kun",
+      "name": "Toilet-bound Hanako-kun",
+      "hasAnilistId": true
+    },
+    "112608": {
+      "slug": "ive-been-killing-slimes-for-300-years-and-maxed-out-my-level",
+      "name": "I've Been Killing Slimes for 300 Years and Maxed Out My Level",
+      "hasAnilistId": true
+    },
+    "112649": {
+      "slug": "suppose-a-kid-from-the-last-dungeon-boonies-moved-to-a-starter-town",
+      "name": "Suppose a Kid from the Last Dungeon Boonies moved to a starter town?",
+      "hasAnilistId": true
+    },
+    "113415": {
+      "slug": "jujutsu-kaisen",
+      "name": "Jujutsu Kaisen",
+      "hasAnilistId": true
+    },
+    "113717": {
+      "slug": "ranking-of-kings",
+      "name": "Ranking of Kings",
+      "hasAnilistId": true
+    },
+    "113813": {
+      "slug": "rent-a-girlfriend",
+      "name": "Rent-a-Girlfriend",
+      "hasAnilistId": true
+    },
+    "116006": {
+      "slug": "the-god-of-high-school",
+      "name": "The God of High School",
+      "hasAnilistId": true
+    },
+    "116566": {
+      "slug": "akudama-drive",
+      "name": "Akudama Drive",
+      "hasAnilistId": true
+    },
+    "116674": {
+      "slug": "bleach-thousand-year-blood-war",
+      "name": "BLEACH: Thousand-Year Blood War",
+      "hasAnilistId": true
+    },
+    "124080": {
+      "slug": "horimiya",
+      "name": "Horimiya",
+      "hasAnilistId": true
+    },
+    "124195": {
+      "slug": "baki-hanma",
+      "name": "Baki Hanma",
+      "hasAnilistId": true
+    },
+    "127230": {
+      "slug": "chainsaw-man",
+      "name": "Chainsaw Man",
+      "hasAnilistId": true
+    },
+    "127271": {
+      "slug": "belle",
+      "name": "BELLE",
+      "hasAnilistId": true
+    },
+    "129201": {
+      "slug": "summer-time-rendering",
+      "name": "Summer Time Rendering",
+      "hasAnilistId": true
+    },
+    "130706": {
+      "slug": "akuma-kun",
+      "name": "Akuma Kun",
+      "hasAnilistId": true
+    },
+    "132052": {
+      "slug": "a-couple-of-cuckoos",
+      "name": "A Couple of Cuckoos",
+      "hasAnilistId": true
+    },
+    "132405": {
+      "slug": "my-dress-up-darling",
+      "name": "My Dress-Up Darling",
+      "hasAnilistId": true
+    },
+    "134732": {
+      "slug": "aoashi",
+      "name": "Aoashi",
+      "hasAnilistId": true
+    },
+    "137667": {
+      "slug": "lord-of-mysteries",
+      "name": "Lord of Mysteries",
+      "hasAnilistId": true
+    },
+    "139274": {
+      "slug": "mobile-suit-gundam-the-witch-from-mercury",
+      "name": "Mobile Suit Gundam: The Witch from Mercury",
+      "hasAnilistId": true
+    },
+    "139630": {
+      "slug": "attack-on-titan",
+      "name": "Attack on Titan Final Season",
+      "hasAnilistId": true
+    },
+    "141775": {
+      "slug": "shoot-goal-to-the-future",
+      "name": "Shoot! Goal to the Future",
+      "hasAnilistId": true
+    },
+    "142329": {
+      "slug": "demon-slayer",
+      "name": "Demon Slayer Season 2",
+      "hasAnilistId": true
+    },
+    "143338": {
+      "slug": "the-angel-next-door-spoils-me-rotten",
+      "name": "The Angel Next Door Spoils Me Rotten",
+      "hasAnilistId": true
+    },
+    "145134": {
+      "slug": "jujutsu-kaisen",
+      "name": "Jujutsu Kaisen Season 2",
+      "hasAnilistId": true
+    },
+    "145139": {
+      "slug": "demon-slayer",
+      "name": "Demon Slayer Season 3",
+      "hasAnilistId": true
+    },
+    "147103": {
+      "slug": "my-happy-marriage",
+      "name": "My Happy Marriage",
+      "hasAnilistId": true
+    },
+    "150077": {
+      "slug": "paradox-live-the-animation",
+      "name": "Paradox Live THE ANIMATION",
+      "hasAnilistId": true
+    },
+    "151806": {
+      "slug": "tomo-chan-is-a-girl",
+      "name": "Tomo-chan Is a Girl!",
+      "hasAnilistId": true
+    },
+    "151807": {
+      "slug": "solo-leveling",
+      "name": "Solo Leveling",
+      "hasAnilistId": true
+    },
+    "153360": {
+      "slug": "reborn-as-a-vending-machine-i-now-wander-the-dungeon",
+      "name": "Reborn as a Vending Machine, I Now Wander the Dungeon",
+      "hasAnilistId": true
+    },
+    "155838": {
+      "slug": "new-saga",
+      "name": "New Saga",
+      "hasAnilistId": true
+    },
+    "155907": {
+      "slug": "buddy-daddies",
+      "name": "Buddy Daddies",
+      "hasAnilistId": true
+    },
+    "162147": {
+      "slug": "pokmon-concierge",
+      "name": "Pokémon Concierge",
+      "hasAnilistId": true
+    },
+    "164702": {
+      "slug": "as-a-reincarnated-aristocrat-ill-use-my-appraisal-skill-to-rise-in-the-world",
+      "name": "As a Reincarnated Aristocrat, I'll Use My Appraisal Skill to Rise in the World",
+      "hasAnilistId": true
+    },
+    "166240": {
+      "slug": "demon-slayer",
+      "name": "Demon Slayer Season 4",
+      "hasAnilistId": true
+    },
+    "170068": {
+      "slug": "sousou-no-frieren-no-mahou",
+      "name": "Sousou no Frieren: ●● no Mahou",
+      "hasAnilistId": true
+    },
+    "177106": {
+      "slug": "garouden-the-way-of-the-lone-wolf",
+      "name": "Garouden: The Way of the Lone Wolf",
+      "hasAnilistId": true
+    },
+    "177476": {
+      "slug": "yaiba-samurai-legend",
+      "name": "YAIBA: Samurai Legend",
+      "hasAnilistId": true
+    },
+    "177709": {
+      "slug": "sakamoto-days",
+      "name": "SAKAMOTO DAYS",
+      "hasAnilistId": true
+    },
+    "177887": {
+      "slug": "leviathan",
+      "name": "Leviathan",
+      "hasAnilistId": true
+    },
+    "178025": {
+      "slug": "gachiakuta",
+      "name": "Gachiakuta",
+      "hasAnilistId": true
+    },
+    "178548": {
+      "slug": "even-given-the-worthless-appraiser-class-im-actually-the-strongest",
+      "name": "Even Given the Worthless “Appraiser” Class, I’m Actually the Strongest",
+      "hasAnilistId": true
+    },
+    "178869": {
+      "slug": "clevatess",
+      "name": "Clevatess",
+      "hasAnilistId": true
+    },
+    "184574": {
+      "slug": "dekin-no-mogura-the-earthbound-mole",
+      "name": "Dekin no Mogura: The Earthbound Mole",
+      "hasAnilistId": true
+    },
+    "185544": {
+      "slug": "welcome-to-the-outcasts-restaurant",
+      "name": "Welcome to the Outcast's Restaurant!",
+      "hasAnilistId": true
+    }
+  },
+  "randomAnimePool": [
+    20,
+    113415,
+    127230,
+    97940,
+    21087,
+    16498,
+    101348,
+    74,
+    75,
+    76,
+    77,
+    79,
+    80,
+    81,
+    82,
+    83,
+    84,
+    85,
+    86,
+    87,
+    88,
+    89,
+    90,
+    91,
+    92,
+    1258,
+    1259,
+    1260,
+    1261,
+    1262,
+    1263,
+    1264,
+    1265,
+    2561,
+    2562,
+    2563,
+    2564,
+    2565,
+    2566,
+    2567,
+    2568,
+    2569,
+    2570,
+    2571,
+    2572,
+    2573,
+    2574,
+    2575,
+    2576,
+    101921,
+    98659,
+    21507,
+    20832,
+    21355,
+    134732,
+    143338,
+    129201,
+    139274,
+    113813,
+    4898,
+    147103,
+    116674,
+    1575,
+    155907,
+    116566,
+    136,
+    132052,
+    151806,
+    6702,
+    21049,
+    113717,
+    151807,
+    170068,
+    101024,
+    116006,
+    127271,
+    164702,
+    20776,
+    141775,
+    162147,
+    112608,
+    124195,
+    177476,
+    108463,
+    184574,
+    132405,
+    155838,
+    153360,
+    124080,
+    137667,
+    4264,
+    5505,
+    130706,
+    5039,
+    5041,
+    5507,
+    177709,
+    177106,
+    178548,
+    177887,
+    178025,
+    185544,
+    178869,
+    150077,
+    112649
+  ],
+  "apiStats": {
+    "totalRequests": 3,
+    "successfulRequests": 3,
+    "failedRequests": 0,
+    "lastUpdated": "2025-09-28T12:11:56.286Z"
+  },
+  "lastSaved": "2025-09-28T13:05:41.979Z"
+}

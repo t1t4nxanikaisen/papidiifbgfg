@@ -1,9 +1,6 @@
 import express from 'express';
 import axios from 'axios';
 import * as cheerio from 'cheerio';
-import fs from 'fs/promises';
-import path from 'path';
-
 
 const app = express();
 app.use(express.json());
@@ -12,7 +9,7 @@ app.use(express.urlencoded({ extended: true }));
 // Simple in-memory session store
 const sessions = new Set();
 
-// Dynamic slug database
+// Dynamic slug database - in memory only for Vercel
 let slugExceptions = {
   269: { slug: "bleach", name: "Bleach", hasAnilistId: true },
   41467: { slug: "bleach-thousand-year-blood-war", name: "Bleach: Thousand-Year Blood War", hasAnilistId: true },
@@ -47,34 +44,15 @@ let apiStats = {
   lastUpdated: new Date().toISOString()
 };
 
-// Load/Save database functions
+// Vercel-compatible database functions (in-memory only)
 async function loadDatabase() {
-  try {
-    const data = await fs.readFile('anime_database.json', 'utf8');
-    const savedData = JSON.parse(data);
-    slugExceptions = { ...slugExceptions, ...savedData.slugExceptions };
-    randomAnimePool = savedData.randomAnimePool || randomAnimePool;
-    apiStats = savedData.apiStats || apiStats;
-    console.log(`📊 Loaded ${Object.keys(slugExceptions).length} entries from database`);
-  } catch (error) {
-    console.log('📊 Using default database (file not found)');
-    await saveDatabase();
-  }
+  console.log('📊 Using in-memory database (file system not available on Vercel)');
+  return;
 }
 
 async function saveDatabase() {
-  try {
-    const dataToSave = {
-      slugExceptions,
-      randomAnimePool,
-      apiStats,
-      lastSaved: new Date().toISOString()
-    };
-    await fs.writeFile('anime_database.json', JSON.stringify(dataToSave, null, 2));
-    console.log('💾 Database saved successfully');
-  } catch (error) {
-    console.error('❌ Failed to save database:', error.message);
-  }
+  console.log('💾 Database save skipped (file system not available on Vercel)');
+  return;
 }
 
 // Track API usage
@@ -1616,8 +1594,14 @@ async function startServer() {
     await loadDatabase();
     
     const PORT = process.env.PORT || 3000;
-    app.listen(PORT, () => {
-      console.log(`
+    
+    // Export for Vercel
+    module.exports = app;
+    
+    // Only listen if not in Vercel environment
+    if (process.env.NODE_ENV !== 'production') {
+      app.listen(PORT, () => {
+        console.log(`
 🚀 ANIMEWORLD API WITH ENHANCED ADMIN PANEL
 ───────────────────────────────────────────
 📍 Port: ${PORT}
@@ -1625,8 +1609,9 @@ async function startServer() {
 🎲 Random Pool: ${randomAnimePool.length} anime
 🔗 Admin: http://localhost:${PORT}/admin
 ───────────────────────────────────────────
-      `);
-    });
+        `);
+      });
+    }
   } catch (error) {
     console.error('❌ Failed to start server:', error);
   }
@@ -1642,3 +1627,6 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 startServer();
+
+// Export the Express API for Vercel
+export default app;

@@ -4,13 +4,12 @@ import * as cheerio from 'cheerio';
 import fs from 'fs/promises';
 import path from 'path';
 
-
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Simple in-memory session store
-const sessions = new Set();
+// Persistent session store
+let sessions = new Set();
 
 // Dynamic slug database
 let slugExceptions = {
@@ -74,6 +73,26 @@ async function saveDatabase() {
     console.log('💾 Database saved successfully');
   } catch (error) {
     console.error('❌ Failed to save database:', error.message);
+  }
+}
+
+// Load/Save sessions
+async function loadSessions() {
+  try {
+    const data = await fs.readFile('sessions.json', 'utf8');
+    const savedSessions = JSON.parse(data);
+    sessions = new Set(savedSessions);
+    console.log(`🔑 Loaded ${sessions.size} active sessions`);
+  } catch (error) {
+    console.log('🔑 No saved sessions found');
+  }
+}
+
+async function saveSessions() {
+  try {
+    await fs.writeFile('sessions.json', JSON.stringify([...sessions], null, 2));
+  } catch (error) {
+    console.error('❌ Failed to save sessions:', error.message);
   }
 }
 
@@ -331,7 +350,91 @@ function detectServer(url) {
   return 'Unknown Server';
 }
 
-// Generate HTML player
+// Clean iframe-only player
+function generateCleanIframePlayer(sourceUrl) {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Anime Player</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            background: #000;
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+        }
+        #player {
+            width: 100%;
+            height: 100%;
+            border: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 9999;
+        }
+        .back-btn {
+            position: fixed;
+            top: 15px;
+            left: 15px;
+            z-index: 10000;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            text-decoration: none;
+            font-family: Arial, sans-serif;
+            transition: opacity 0.3s ease;
+        }
+        .back-btn:hover {
+            background: rgba(0,0,0,0.9);
+        }
+    </style>
+</head>
+<body>
+    <a href="javascript:history.back()" class="back-btn">← Back</a>
+    <iframe 
+        id="player" 
+        src="${sourceUrl}" 
+        allowfullscreen 
+        allow="autoplay; fullscreen; picture-in-picture"
+        scrolling="no"
+        frameborder="0">
+    </iframe>
+    
+    <script>
+        // Make iframe truly fullscreen
+        document.getElementById('player').style.width = '100vw';
+        document.getElementById('player').style.height = '100vh';
+        
+        // Hide back button after 3 seconds
+        setTimeout(() => {
+            document.querySelector('.back-btn').style.opacity = '0.3';
+        }, 3000);
+        
+        // Show back button on hover
+        document.querySelector('.back-btn').addEventListener('mouseenter', () => {
+            document.querySelector('.back-btn').style.opacity = '1';
+        });
+        
+        document.querySelector('.back-btn').addEventListener('mouseleave', () => {
+            document.querySelector('.back-btn').style.opacity = '0.3';
+        });
+    </script>
+</body>
+</html>`;
+}
+
+// Original player (for non-clean mode)
 function generatePlayer(title, season, episode, sources, contentUrl) {
   if (sources.length === 0) {
     return `<!DOCTYPE html>
@@ -418,7 +521,7 @@ function generatePlayer(title, season, episode, sources, contentUrl) {
         .server-btn.active {
             background: linear-gradient(45deg, #f093fb, #f5576c);
         }
-        .random-btn {
+        .clean-mode-btn {
             position: fixed;
             top: 20px;
             right: 20px;
@@ -430,14 +533,34 @@ function generatePlayer(title, season, episode, sources, contentUrl) {
             text-decoration: none;
             font-weight: bold;
             transition: all 0.3s ease;
+            z-index: 1000;
+        }
+        .clean-mode-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 15px rgba(17, 153, 142, 0.4);
+        }
+        .random-btn {
+            position: fixed;
+            top: 70px;
+            right: 20px;
+            padding: 10px 20px;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            border: none;
+            border-radius: 25px;
+            color: white;
+            text-decoration: none;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            z-index: 1000;
         }
         .random-btn:hover {
             transform: scale(1.05);
-            box-shadow: 0 5px 15px rgba(17, 153, 142, 0.4);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
         }
     </style>
 </head>
 <body>
+    <a href="/api/iframe?url=${encodeURIComponent(primarySource.url)}" class="clean-mode-btn">🎬 Clean Mode</a>
     <a href="/api/random" class="random-btn">🎲 Random Anime</a>
     
     <div class="container">
@@ -477,23 +600,30 @@ function generatePlayer(title, season, episode, sources, contentUrl) {
 // ==================== ADMIN PANEL ROUTES ====================
 
 // Admin login endpoint
-app.post('/admin/login', (req, res) => {
+app.post('/admin/login', async (req, res) => {
   const { password } = req.body;
   
   if (password === '123Admin09') {
-    const sessionId = Date.now().toString() + Math.random().toString(36);
+    const sessionId = 'session_' + Date.now().toString() + Math.random().toString(36).substr(2, 9);
     sessions.add(sessionId);
     
-    // Clean old sessions (simple cleanup)
-    if (sessions.size > 10) {
-      const oldSession = sessions.values().next().value;
-      sessions.delete(oldSession);
+    // Clean old sessions (keep last 20)
+    if (sessions.size > 20) {
+      const sessionsArray = [...sessions];
+      sessions = new Set(sessionsArray.slice(-20));
     }
+    
+    await saveSessions();
     
     res.json({ success: true, token: sessionId });
   } else {
     res.status(401).json({ error: 'Invalid password' });
   }
+});
+
+// Check session endpoint
+app.get('/admin/check-session', requireAuth, (req, res) => {
+  res.json({ valid: true });
 });
 
 // Admin API endpoints
@@ -513,7 +643,15 @@ app.get('/admin/stats', requireAuth, (req, res) => {
 });
 
 app.get('/admin/database', requireAuth, (req, res) => {
-  res.json({ database: slugExceptions });
+  // Convert to array for easier handling in frontend
+  const databaseArray = Object.entries(slugExceptions).map(([id, entry]) => ({
+    id: parseInt(id),
+    name: entry.name,
+    slug: entry.slug,
+    hasAnilistId: entry.hasAnilistId
+  }));
+  
+  res.json({ database: databaseArray });
 });
 
 app.post('/admin/anime', requireAuth, async (req, res) => {
@@ -681,7 +819,7 @@ app.delete('/admin/anime/:id', requireAuth, async (req, res) => {
 app.get('/', (req, res) => {
   res.json({
     message: '🎬 AnimeWorld API with Admin Panel',
-    version: '2.0.0',
+    version: '2.1.0',
     status: 'active',
     endpoints: [
       {
@@ -698,6 +836,11 @@ app.get('/', (req, res) => {
       },
       {
         method: 'GET',
+        url: '/api/iframe',
+        description: 'Clean iframe player'
+      },
+      {
+        method: 'GET',
         url: '/admin',
         description: 'Admin panel (password: 123Admin09)'
       }
@@ -705,10 +848,26 @@ app.get('/', (req, res) => {
   });
 });
 
+// Clean iframe endpoint - FIXED ROUTE
+app.get('/api/iframe', (req, res) => {
+  const url = req.query.url;
+  
+  if (!url) {
+    return res.status(400).json({ error: 'URL parameter is required' });
+  }
+  
+  console.log(`🎬 CLEAN IFRAME: ${url}`);
+  
+  const html = generateCleanIframePlayer(url);
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(html);
+});
+
 // Main streaming endpoint
 app.get('/api/anime/:anilistId/:season/:episode', async (req, res) => {
   const { anilistId, season, episode } = req.params;
   const jsonMode = req.query.json === '1';
+  const cleanMode = req.query.clean === '1';
 
   console.log(`\n🎬 STREAMING: ID ${anilistId} - S${season}E${episode}`);
   
@@ -783,6 +942,11 @@ app.get('/api/anime/:anilistId/:season/:episode', async (req, res) => {
         return res.json(responseData);
       }
 
+      if (cleanMode && result.sources.length > 0) {
+        const primarySource = result.sources[0];
+        return res.redirect(`/api/iframe?url=${encodeURIComponent(primarySource.url)}`);
+      }
+
       const html = generatePlayer(primaryTitle, season, episode, result.sources, result.url);
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.send(html);
@@ -839,6 +1003,11 @@ app.get('/api/anime/:anilistId/:season/:episode', async (req, res) => {
         return res.json(responseData);
       }
 
+      if (cleanMode && result.sources.length > 0) {
+        const primarySource = result.sources[0];
+        return res.redirect(`/api/iframe?url=${encodeURIComponent(primarySource.url)}`);
+      }
+
       const html = generatePlayer(primaryTitle, season, episode, result.sources, result.url);
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       return res.send(html);
@@ -857,6 +1026,7 @@ app.get('/api/anime/:anilistId/:season/:episode', async (req, res) => {
 // Random endpoint
 app.get('/api/random', async (req, res) => {
   const jsonMode = req.query.json === '1';
+  const cleanMode = req.query.clean === '1';
   
   try {
     const randomId = randomAnimePool[Math.floor(Math.random() * randomAnimePool.length)];
@@ -900,6 +1070,11 @@ app.get('/api/random', async (req, res) => {
       return res.json(responseData);
     }
 
+    if (cleanMode && result.sources.length > 0) {
+      const primarySource = result.sources[0];
+      return res.redirect(`/api/iframe?url=${encodeURIComponent(primarySource.url)}`);
+    }
+
     const html = generatePlayer(primaryTitle, season, episode, result.sources, result.url);
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     return res.send(html);
@@ -918,10 +1093,11 @@ app.get('/api/random', async (req, res) => {
 app.get('/health', (req, res) => {
   res.json({ 
     status: 'active',
-    version: '2.0.0',
+    version: '2.1.0',
     database_entries: Object.keys(slugExceptions).length,
     random_pool: randomAnimePool.length,
-    total_requests: apiStats.totalRequests
+    total_requests: apiStats.totalRequests,
+    active_sessions: sessions.size
   });
 });
 
@@ -1286,7 +1462,7 @@ app.get('/admin', (req, res) => {
             <!-- Database Tab -->
             <div id="databaseTab" class="tab-content">
                 <div class="section">
-                    <h3>📊 Current Database (${Object.keys(slugExceptions).length} entries)</h3>
+                    <h3>📊 Current Database (<span id="dbCount">0</span> entries)</h3>
                     <div class="anime-list" id="animeList">
                         Loading...
                     </div>
@@ -1297,8 +1473,39 @@ app.get('/admin', (req, res) => {
     </div>
 
     <script>
-        let authToken = '';
+        let authToken = localStorage.getItem('adminToken') || '';
         let bulkAnimeData = [];
+
+        // Check if already logged in
+        if (authToken) {
+            checkSession();
+        }
+
+        // Check session validity
+        async function checkSession() {
+            try {
+                const response = await fetch('/admin/check-session', {
+                    headers: { 'Authorization': authToken }
+                });
+                
+                if (response.ok) {
+                    showAdminPanel();
+                } else {
+                    localStorage.removeItem('adminToken');
+                    authToken = '';
+                }
+            } catch (error) {
+                localStorage.removeItem('adminToken');
+                authToken = '';
+            }
+        }
+
+        function showAdminPanel() {
+            document.getElementById('login').style.display = 'none';
+            document.getElementById('adminPanel').style.display = 'flex';
+            loadStats();
+            refreshDatabase();
+        }
 
         // Tab management
         function switchTab(tabName) {
@@ -1332,10 +1539,8 @@ app.get('/admin', (req, res) => {
                 
                 if (data.success) {
                     authToken = data.token;
-                    document.getElementById('login').style.display = 'none';
-                    document.getElementById('adminPanel').style.display = 'flex';
-                    loadStats();
-                    refreshDatabase();
+                    localStorage.setItem('adminToken', authToken);
+                    showAdminPanel();
                 } else {
                     showMessage('loginMessage', data.error, 'error');
                 }
@@ -1522,9 +1727,12 @@ app.get('/admin', (req, res) => {
                 const data = await response.json();
                 
                 const list = document.getElementById('animeList');
-                list.innerHTML = '';
+                const count = document.getElementById('dbCount');
                 
-                Object.entries(data.database).forEach(([id, entry]) => {
+                list.innerHTML = '';
+                count.textContent = data.database.length;
+                
+                data.database.forEach(entry => {
                     const item = document.createElement('div');
                     item.className = 'anime-item';
                     
@@ -1534,14 +1742,14 @@ app.get('/admin', (req, res) => {
                     
                     item.innerHTML = \`
                         <div class="anime-info">
-                            <div class="anime-id">ID: \${id}</div>
+                            <div class="anime-id">ID: \${entry.id}</div>
                             <div style="color: #38ef7d; font-weight: bold;">
                                 \${displayName}
                                 <span class="anime-type">\${type}</span>
                             </div>
                             <div class="anime-slug">\${slug}</div>
                         </div>
-                        <button class="delete-btn" onclick="deleteAnime(\${id})">Delete</button>
+                        <button class="delete-btn" onclick="deleteAnime(\${entry.id})">Delete</button>
                     \`;
                     list.appendChild(item);
                 });
@@ -1598,6 +1806,7 @@ app.get('/admin', (req, res) => {
 
         function logout() {
             authToken = '';
+            localStorage.removeItem('adminToken');
             document.getElementById('login').style.display = 'flex';
             document.getElementById('adminPanel').style.display = 'none';
             document.getElementById('password').value = '';
@@ -1614,6 +1823,7 @@ app.get('/admin', (req, res) => {
 async function startServer() {
   try {
     await loadDatabase();
+    await loadSessions();
     
     const PORT = process.env.PORT || 3000;
     app.listen(PORT, () => {
@@ -1623,6 +1833,7 @@ async function startServer() {
 📍 Port: ${PORT}
 📊 Database: ${Object.keys(slugExceptions).length} anime
 🎲 Random Pool: ${randomAnimePool.length} anime
+🔑 Active Sessions: ${sessions.size}
 🔗 Admin: http://localhost:${PORT}/admin
 ───────────────────────────────────────────
       `);

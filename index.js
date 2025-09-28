@@ -350,61 +350,163 @@ function detectServer(url) {
   return 'Unknown Server';
 }
 
-// Clean iframe-only player - UPDATED VERSION
-function generateCleanIframePlayer(sourceUrl) {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Anime Player</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        body {
-            background: #000;
-            overflow: hidden;
-            height: 100vh;
-            width: 100vw;
-        }
-        #player {
-            width: 100vw;
-            height: 100vh;
-            border: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            z-index: 9999;
-        }
-    </style>
-</head>
-<body>
-    <iframe 
-        id="player" 
-        src="${sourceUrl}" 
-        allowfullscreen 
-        allow="autoplay; fullscreen; picture-in-picture"
-        scrolling="no"
-        frameborder="0">
-    </iframe>
-    
-    <script>
-        // Ensure iframe takes full viewport
-        document.getElementById('player').style.width = '100vw';
-        document.getElementById('player').style.height = '100vh';
+// Main streaming endpoint - UPDATED to always use clean iframe
+app.get('/api/anime/:anilistId/:season/:episode', async (req, res) => {
+  const { anilistId, season, episode } = req.params;
+  const jsonMode = req.query.json === '1';
+
+  console.log(`\n🎬 STREAMING: ID ${anilistId} - S${season}E${episode}`);
+  
+  try {
+    // Check if this ID exists in our database first
+    const isInDatabase = slugExceptions[anilistId];
+    let animeInfo = null;
+    let primaryTitle = 'Unknown Anime';
+
+    if (isInDatabase) {
+      const dbEntry = slugExceptions[anilistId];
+      const dbSlug = dbEntry.slug;
+      const dbName = dbEntry.name;
+      
+      console.log(`🎯 Found in database: ${dbSlug}`);
+      
+      // Try to get AniList info only if it has AniList ID
+      if (dbEntry.hasAnilistId) {
+        animeInfo = await getAnimeInfo(anilistId);
+      }
+      
+      if (animeInfo) {
+        primaryTitle = animeInfo.english || animeInfo.romaji;
+        console.log(`📺 AniList info found: ${primaryTitle}`);
+      } else {
+        // Use stored name for custom entries
+        primaryTitle = dbName;
+        console.log(`📺 Custom entry: ${primaryTitle}`);
         
-        // Remove any potential margin/padding
-        document.body.style.margin = '0';
-        document.body.style.padding = '0';
-        document.documentElement.style.margin = '0';
-        document.documentElement.style.padding = '0';
-    </script>
-</body>
-</html>`;
+        // Create mock anime info for custom entries
+        animeInfo = {
+          english: primaryTitle,
+          romaji: primaryTitle,
+          format: 'TV'
+        };
+      }
+
+      // Use database slug directly
+      const slugs = [dbSlug];
+      console.log(`🧠 Using database slug: ${slugs}`);
+
+      // Find episode
+      console.log('🎯 Searching for content...');
+      const result = await findEpisode(slugs, season, episode, animeInfo);
+
+      if (!result) {
+        trackAPIUsage(false);
+        return res.status(404).json({ 
+          error: 'Content not found',
+          anime_title: primaryTitle,
+          tried_slugs: slugs
+        });
+      }
+
+      console.log(`🎉 SUCCESS! Found on ${result.pathType} with ${result.sources.length} sources`);
+      trackAPIUsage(true);
+
+      const responseData = {
+        success: true,
+        id: parseInt(anilistId),
+        anime_title: primaryTitle,
+        season: parseInt(season),
+        episode: parseInt(episode),
+        slug: result.slug,
+        content_url: result.url,
+        sources: result.sources,
+        from_database: true,
+        has_anilist_id: dbEntry.hasAnilistId
+      };
+
+      if (jsonMode) {
+        return res.json(responseData);
+      }
+// ALWAYS redirect to clean iframe when sources are found
+if (result.sources.length > 0) {
+  const primarySource = result.sources[0];
+  return res.redirect(`/api/iframe?url=${encodeURIComponent(primarySource.url)}`);
 }
+
+      // Fallback to simple message if no sources but content found
+      return res.send(`Content found at: ${result.url}`);
+
+    } else {
+      // Not in database, try AniList approach
+      console.log('📡 Not in database, fetching from AniList...');
+      animeInfo = await getAnimeInfo(anilistId);
+      
+      if (!animeInfo) {
+        trackAPIUsage(false);
+        return res.status(404).json({ 
+          error: 'Anime not found on AniList and not in custom database',
+          suggestion: 'Add this anime to the database via admin panel'
+        });
+      }
+
+      primaryTitle = animeInfo.english || animeInfo.romaji;
+      console.log(`📺 AniList Anime: ${primaryTitle}`);
+
+      // Generate slugs naturally
+      const slugs = generateSlugs(animeInfo, parseInt(anilistId));
+      console.log(`🧠 Generated slugs: ${slugs}`);
+
+      // Find episode
+      console.log('🎯 Searching for content...');
+      const result = await findEpisode(slugs, season, episode, animeInfo);
+
+      if (!result) {
+        trackAPIUsage(false);
+        return res.status(404).json({ 
+          error: 'Content not found',
+          anime_title: primaryTitle,
+          tried_slugs: slugs
+        });
+      }
+
+      console.log(`🎉 SUCCESS! Found on ${result.pathType} with ${result.sources.length} sources`);
+      trackAPIUsage(true);
+
+      const responseData = {
+        success: true,
+        anilist_id: parseInt(anilistId),
+        anime_title: primaryTitle,
+        season: parseInt(season),
+        episode: parseInt(episode),
+        slug: result.slug,
+        content_url: result.url,
+        sources: result.sources,
+        from_database: false
+      };
+
+      if (jsonMode) {
+        return res.json(responseData);
+      }
+
+      // ALWAYS redirect to clean iframe when sources are found
+      if (result.sources.length > 0) {
+        const primarySource = result.sources[0];
+        return res.redirect(`/api/iframe?url=${encodeURIComponent(primarySource.url)}`);
+      }
+
+      // Fallback to simple message if no sources but content found
+      return res.send(`Content found at: ${result.url}`);
+    }
+
+  } catch (error) {
+    console.error('💥 Error:', error.message);
+    trackAPIUsage(false);
+    res.status(500).json({ 
+      error: 'Server error', 
+      details: error.message
+    });
+  }
+});
 
 // Original player (for non-clean mode)
 function generatePlayer(title, season, episode, sources, contentUrl) {
@@ -532,7 +634,7 @@ function generatePlayer(title, season, episode, sources, contentUrl) {
     </style>
 </head>
 <body>
-    <a href="/api/iframe?url=${encodeURIComponent(primarySource.url)}" class="clean-mode-btn">🎬 Clean Mode</a>
+    <a href="/api/anime/${primarySource.url.split('/').pop()}?clean=1" class="clean-mode-btn">🎬 Clean Mode</a>
     <a href="/api/random" class="random-btn">🎲 Random Anime</a>
     
     <div class="container">
@@ -808,11 +910,6 @@ app.get('/', (req, res) => {
       },
       {
         method: 'GET',
-        url: '/api/iframe',
-        description: 'Clean iframe player'
-      },
-      {
-        method: 'GET',
         url: '/admin',
         description: 'Admin panel (password: 123Admin09)'
       }
@@ -830,7 +927,45 @@ app.get('/api/iframe', (req, res) => {
   
   console.log(`🎬 CLEAN IFRAME: ${url}`);
   
-  const html = generateCleanIframePlayer(url);
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Player</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        html, body {
+            background: #000;
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+        }
+        iframe {
+            width: 100vw;
+            height: 100vh;
+            border: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+        }
+    </style>
+</head>
+<body>
+    <iframe 
+        src="${url}" 
+        allowfullscreen 
+        allow="autoplay; fullscreen; picture-in-picture"
+        scrolling="no"
+        frameborder="0">
+    </iframe>
+</body>
+</html>`;
+  
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.send(html);
 });
@@ -916,7 +1051,9 @@ app.get('/api/anime/:anilistId/:season/:episode', async (req, res) => {
 
       if (cleanMode && result.sources.length > 0) {
         const primarySource = result.sources[0];
-        return res.redirect(`/api/iframe?url=${encodeURIComponent(primarySource.url)}`);
+        const html = generateCleanIframePlayer(primarySource.url);
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        return res.send(html);
       }
 
       const html = generatePlayer(primaryTitle, season, episode, result.sources, result.url);
@@ -977,7 +1114,9 @@ app.get('/api/anime/:anilistId/:season/:episode', async (req, res) => {
 
       if (cleanMode && result.sources.length > 0) {
         const primarySource = result.sources[0];
-        return res.redirect(`/api/iframe?url=${encodeURIComponent(primarySource.url)}`);
+        const html = generateCleanIframePlayer(primarySource.url);
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        return res.send(html);
       }
 
       const html = generatePlayer(primaryTitle, season, episode, result.sources, result.url);
@@ -1044,7 +1183,9 @@ app.get('/api/random', async (req, res) => {
 
     if (cleanMode && result.sources.length > 0) {
       const primarySource = result.sources[0];
-      return res.redirect(`/api/iframe?url=${encodeURIComponent(primarySource.url)}`);
+      const html = generateCleanIframePlayer(primarySource.url);
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.send(html);
     }
 
     const html = generatePlayer(primaryTitle, season, episode, result.sources, result.url);

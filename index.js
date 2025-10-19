@@ -1,13 +1,17 @@
 import express from 'express';
 import axios from 'axios';
 import { load } from 'cheerio';
+import sqlite3 from 'sqlite3';
+import { open } from 'sqlite';
 import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import cors from 'cors';
 
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(cors());
 
 // Fix for __dirname in ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -54,6 +58,85 @@ let apiStats = {
 // File paths
 const DB_FILE = path.join(process.env.VERCEL ? '/tmp' : __dirname, 'anime_database.json');
 
+// Initialize SQLite database with caching
+let sqliteDb;
+(async () => {
+  sqliteDb = await open({
+    filename: './anime_cache.db',
+    driver: sqlite3.Database,
+  });
+
+  await sqliteDb.exec(`
+    CREATE TABLE IF NOT EXISTS anime_cache (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      query TEXT UNIQUE,
+      title TEXT,
+      slug TEXT,
+      source TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      last_accessed DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await sqliteDb.exec(`
+    CREATE TABLE IF NOT EXISTS episode_cache (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      slug TEXT,
+      season INTEGER,
+      episode INTEGER,
+      servers TEXT,
+      source TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      last_accessed DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `);
+
+  await sqliteDb.exec('CREATE INDEX IF NOT EXISTS idx_query ON anime_cache(query)');
+  await sqliteDb.exec('CREATE INDEX IF NOT EXISTS idx_slug_season_episode ON episode_cache(slug, season, episode)');
+})();
+
+// Cache management functions
+async function getCachedAnime(query) {
+  const cached = await sqliteDb.get(
+    'SELECT title, slug, source FROM anime_cache WHERE query = ? AND datetime(last_accessed) > datetime("now", "-1 hour")',
+    query.toLowerCase()
+  );
+  if (cached) {
+    await sqliteDb.run('UPDATE anime_cache SET last_accessed = CURRENT_TIMESTAMP WHERE query = ?', query.toLowerCase());
+    return cached;
+  }
+  return null;
+}
+
+async function cacheAnime(query, title, slug, source) {
+  await sqliteDb.run(
+    'INSERT OR REPLACE INTO anime_cache (query, title, slug, source, last_accessed) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)',
+    [query.toLowerCase(), title, slug, source]
+  );
+}
+
+async function getCachedEpisode(slug, season, episode) {
+  const cached = await sqliteDb.get(
+    'SELECT servers FROM episode_cache WHERE slug = ? AND season = ? AND episode = ? AND datetime(last_accessed) > datetime("now", "-30 minutes")',
+    [slug, season, episode]
+  );
+  if (cached) {
+    await sqliteDb.run(
+      'UPDATE episode_cache SET last_accessed = CURRENT_TIMESTAMP WHERE slug = ? AND season = ? AND episode = ?',
+      [slug, season, episode]
+    );
+    return JSON.parse(cached.servers);
+  }
+  return null;
+}
+
+async function cacheEpisode(slug, season, episode, servers, source) {
+  await sqliteDb.run(
+    'INSERT OR REPLACE INTO episode_cache (slug, season, episode, servers, source, last_accessed) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)',
+    [slug, season, episode, JSON.stringify(servers), source]
+  );
+}
+
 // Load database
 async function loadDatabase() {
   try {
@@ -88,72 +171,92 @@ async function saveDatabase() {
 // ==================== ENHANCED AUTO-SEARCH FUNCTIONS ====================
 
 /**
- * Search anime on watchanimeworld.in and find the best match
+ * Multi-source search function
  */
 async function searchAnime(query) {
-  try {
-    console.log(`Searching for: ${query}`);
-    const searchUrl = `https://watchanimeworld.in/?s=${encodeURIComponent(query)}`;
-    
-    const response = await axios.get(searchUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-        'Referer': 'https://watchanimeworld.in/'
-      },
-      timeout: 10000
-    });
-
-    const $ = load(response.data);
-    const results = [];
-
-    // Extract search results
-    $('.item, .post, .anime-card, .search-result').each((i, el) => {
-      const $el = $(el);
-      const title = $el.find('h3, h2, .title, a').first().text().trim();
-      const url = $el.find('a').first().attr('href');
-      const image = $el.find('img').first().attr('src');
-      
-      if (title && url && url.includes('/anime/') || url.includes('/series/')) {
-        // Extract slug from URL
-        const slugMatch = url.match(/\/(anime|series)\/([^\/]+)/);
-        if (slugMatch) {
-          results.push({
-            title: title,
-            url: url,
-            slug: slugMatch[2],
-            image: image
-          });
-        }
+  console.log(`Searching for: ${query}`);
+  
+  const sources = [
+    {
+      name: 'watchanimeworld',
+      searchUrl: `https://watchanimeworld.in/?s=${encodeURIComponent(query)}`,
+      extractResults: ($) => {
+        const results = [];
+        $('.item, .post, .anime-card, .search-result, a').each((i, el) => {
+          const $el = $(el);
+          const title = $el.find('h3, h2, .title').first().text().trim() || $el.text().trim();
+          const url = $el.attr('href');
+          
+          if (title && url && (url.includes('/anime/') || url.includes('/series/')) && title.length > 2) {
+            const slugMatch = url.match(/\/(anime|series)\/([^\/]+)/);
+            if (slugMatch) {
+              results.push({
+                title: title,
+                url: url,
+                slug: slugMatch[2],
+                source: 'watchanimeworld'
+              });
+            }
+          }
+        });
+        return results.filter((result, index, self) => 
+          index === self.findIndex(r => r.slug === result.slug)
+        );
       }
-    });
-
-    // Also check for direct links in search results
-    $('a').each((i, el) => {
-      const $el = $(el);
-      const href = $el.attr('href');
-      const title = $el.text().trim();
-      
-      if (href && href.includes('/anime/') && title.length > 2) {
-        const slugMatch = href.match(/\/(anime|series)\/([^\/]+)/);
-        if (slugMatch && !results.some(r => r.slug === slugMatch[2])) {
-          results.push({
-            title: title,
-            url: href,
-            slug: slugMatch[2],
-            image: null
-          });
-        }
+    },
+    {
+      name: 'satoru',
+      searchUrl: `https://satoru.one/search?keyword=${encodeURIComponent(query)}`,
+      extractResults: ($) => {
+        const results = [];
+        $('.film_list-wrap .film_list, .search-results .item, a').each((i, el) => {
+          const $el = $(el);
+          const title = $el.find('.film-name, .title, .name').first().text().trim() || $el.text().trim();
+          const url = $el.attr('href');
+          
+          if (title && url && url.includes('/watch/') && title.length > 2) {
+            const slugMatch = url.match(/\/watch\/([^?]+)/);
+            if (slugMatch) {
+              results.push({
+                title: title,
+                url: url,
+                slug: slugMatch[1],
+                source: 'satoru'
+              });
+            }
+          }
+        });
+        return results.filter((result, index, self) => 
+          index === self.findIndex(r => r.slug === result.slug)
+        );
       }
-    });
+    }
+  ];
 
-    console.log(`Found ${results.length} search results for "${query}"`);
-    return results;
+  const allResults = [];
 
-  } catch (error) {
-    console.error(`Search failed for "${query}":`, error.message);
-    return [];
+  for (const source of sources) {
+    try {
+      const { data } = await axios.get(source.searchUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.9'
+        },
+        timeout: 8000
+      });
+
+      const $ = load(data);
+      const results = source.extractResults($);
+      allResults.push(...results);
+      
+      console.log(`Found ${results.length} results from ${source.name}`);
+    } catch (error) {
+      console.log(`Search failed for ${source.name}:`, error.message);
+    }
   }
+
+  return allResults;
 }
 
 /**
@@ -162,18 +265,19 @@ async function searchAnime(query) {
 function findBestMatch(results, query) {
   if (results.length === 0) return null;
   
-  const queryLower = query.toLowerCase();
+  const queryLower = query.toLowerCase().trim();
   
-  // Score each result based on match quality
   const scoredResults = results.map(result => {
     let score = 0;
-    const titleLower = result.title.toLowerCase();
+    const titleLower = result.title.toLowerCase().trim();
     
     // Exact match gets highest score
     if (titleLower === queryLower) score += 100;
     
     // Contains all words
-    const queryWords = queryLower.split(/\s+/);
+    const queryWords = queryLower.split(/\s+/).filter(word => word.length > 2);
+    const titleWords = titleLower.split(/\s+/);
+    
     const containsAllWords = queryWords.every(word => titleLower.includes(word));
     if (containsAllWords) score += 50;
     
@@ -184,86 +288,99 @@ function findBestMatch(results, query) {
     // Starts with query
     if (titleLower.startsWith(queryLower)) score += 30;
     
+    // Length similarity
+    const lengthDiff = Math.abs(titleLower.length - queryLower.length);
+    score += Math.max(0, 20 - lengthDiff);
+    
     return { ...result, score };
   });
   
   // Sort by score descending
   scoredResults.sort((a, b) => b.score - a.score);
   
-  console.log(`Best match: "${scoredResults[0].title}" with score ${scoredResults[0].score}`);
-  return scoredResults[0];
+  if (scoredResults[0].score > 10) {
+    console.log(`Best match: "${scoredResults[0].title}" with score ${scoredResults[0].score}`);
+    return scoredResults[0];
+  }
+  
+  return null;
 }
 
 /**
- * Enhanced episode finder with auto-search fallback
+ * Enhanced episode finder with multi-source support
  */
 async function findEpisodeEnhanced(slug, season, episode, animeTitle = "", autoSearch = false) {
-  const baseUrls = [
-    'https://watchanimeworld.in',
-    'https://animeworld-india.me'
+  const sources = [
+    {
+      name: 'watchanimeworld',
+      patterns: [
+        `https://watchanimeworld.in/episode/${slug}-${season}x${episode}/`,
+        `https://watchanimeworld.in/episode/${slug}-s${season.toString().padStart(2, '0')}e${episode.toString().padStart(2, '0')}/`,
+        `https://watchanimeworld.in/episode/${slug}-episode-${episode}/`,
+        `https://watchanimeworld.in/episode/${slug}-season-${season}-episode-${episode}/`,
+        `https://watchanimeworld.in/series/${slug}/season-${season}/episode-${episode}/`,
+        `https://watchanimeworld.in/anime/${slug}/episode-${episode}/`
+      ]
+    },
+    {
+      name: 'satoru',
+      patterns: [
+        `https://satoru.one/watch/${slug}?ep=${episode}`,
+        `https://satoru.one/watch/${slug}?ep=${episode.toString().padStart(2, '0')}`,
+        `https://satoru.one/watch/${slug}-episode-${episode}`,
+        `https://satoru.one/watch/${slug}-${episode}`
+      ]
+    }
   ];
 
   console.log(`Enhanced search for: ${slug} S${season}E${episode}`);
 
-  // Enhanced URL patterns for both sites
-  const patterns = [];
-  
-  baseUrls.forEach(baseUrl => {
-    patterns.push(
-      { url: `${baseUrl}/episode/${slug}-${season}x${episode}/`, name: 'episode-seasonxepisode', source: baseUrl },
-      { url: `${baseUrl}/episode/${slug}-s${season.toString().padStart(2, '0')}e${episode.toString().padStart(2, '0')}/`, name: 'episode-sXXeXX', source: baseUrl },
-      { url: `${baseUrl}/episode/${slug}-episode-${episode}/`, name: 'episode-simple', source: baseUrl },
-      { url: `${baseUrl}/episode/${slug}-season-${season}-episode-${episode}/`, name: 'episode-full', source: baseUrl },
-      { url: `${baseUrl}/series/${slug}/season-${season}/episode-${episode}/`, name: 'series-season-episode', source: baseUrl },
-      { url: `${baseUrl}/anime/${slug}/episode-${episode}/`, name: 'anime-episode', source: baseUrl },
-      { url: `${baseUrl}/tv/${slug}/episode-${episode}/`, name: 'tv-episode', source: baseUrl },
-      { url: `${baseUrl}/watch/${slug}/episode-${episode}/`, name: 'watch-episode', source: baseUrl }
-    );
-  });
+  for (const source of sources) {
+    for (const pattern of source.patterns) {
+      console.log(`Trying pattern: ${pattern}`);
+      
+      try {
+        const response = await axios.get(pattern, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Referer': source.name === 'satoru' ? 'https://satoru.one/' : 'https://watchanimeworld.in/'
+          },
+          timeout: 10000,
+          validateStatus: (status) => status < 500
+        });
 
-  for (const pattern of patterns) {
-    console.log(`Trying pattern: ${pattern.name} from ${pattern.source}`);
-    
-    try {
-      const response = await axios.get(pattern.url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-          'Referer': pattern.source + '/'
-        },
-        timeout: 10000,
-        validateStatus: (status) => status < 500
-      });
+        console.log(`Response status: ${response.status} for ${source.name}`);
 
-      console.log(`Response status: ${response.status} for ${pattern.name}`);
+        // Enhanced page existence checks
+        if (response.status === 404 || 
+            response.data.includes('404') || 
+            response.data.includes('Not Found') ||
+            response.data.includes('Page Not Found') ||
+            response.data.includes('episode not found')) {
+          continue;
+        }
 
-      // Enhanced page existence checks
-      if (response.status === 404 || 
-          response.data.includes('404') || 
-          response.data.includes('Not Found') ||
-          response.data.includes('Page Not Found') ||
-          response.data.includes('episode not found')) {
+        if (response.status !== 200) continue;
+
+        const $ = load(response.data);
+        const servers = await extractAllServers($, source.name, pattern);
+        
+        if (servers.length > 0) {
+          console.log(`Success with ${source.name}! Found ${servers.length} servers`);
+          return { 
+            url: pattern, 
+            servers,
+            usedPattern: pattern,
+            source: source.name,
+            autoSearched: autoSearch
+          };
+        }
+
+      } catch (error) {
+        console.log(`Error with ${source.name}:`, error.message);
         continue;
       }
-
-      if (response.status !== 200) continue;
-
-      const $ = load(response.data);
-      const servers = await extractAllServers($, pattern.source);
-      
-      if (servers.length > 0) {
-        console.log(`Success with pattern ${pattern.name}! Found ${servers.length} servers`);
-        return { 
-          url: pattern.url, 
-          servers,
-          usedPattern: pattern.name,
-          source: pattern.source,
-          autoSearched: autoSearch
-        };
-      }
-
-    } catch (error) {
-      continue;
     }
   }
 
@@ -273,62 +390,82 @@ async function findEpisodeEnhanced(slug, season, episode, animeTitle = "", autoS
 /**
  * Enhanced server extraction for multiple providers
  */
-async function extractAllServers($, baseUrl) {
+async function extractAllServers($, source, baseUrl) {
   const servers = [];
   
-  // Enhanced iframe extraction with multiple attributes
-  $('iframe').each((i, el) => {
-    let src = $(el).attr('src') || $(el).attr('data-src') || $(el).attr('data-url') || $(el).attr('data-player');
-    if (src) {
-      if (src.startsWith('//')) src = 'https:' + src;
-      else if (src.startsWith('/')) src = baseUrl + src;
-      
-      if (src.startsWith('http')) {
-        const serverType = detectServerType(src);
-        servers.push({
-          name: `${serverType} ${servers.length + 1}`,
-          url: src,
-          type: 'iframe',
-          server: serverType
-        });
+  if (source === 'watchanimeworld') {
+    // Extract from watchanimeworld
+    $('iframe').each((i, el) => {
+      let src = $(el).attr('src') || $(el).attr('data-src') || $(el).attr('data-url');
+      if (src) {
+        if (src.startsWith('//')) src = 'https:' + src;
+        else if (src.startsWith('/')) src = 'https://watchanimeworld.in' + src;
+        
+        if (src.startsWith('http')) {
+          const serverType = detectServerType(src);
+          servers.push({
+            name: `${serverType} ${servers.length + 1}`,
+            url: src,
+            type: 'iframe',
+            server: serverType,
+            source: 'watchanimeworld'
+          });
+        }
       }
-    }
-  });
-
-  // Extract from server selection buttons/dropdowns
-  $('[data-player], [data-video], [data-src], [data-url]').each((i, el) => {
-    const src = $(el).attr('data-player') || $(el).attr('data-video') || $(el).attr('data-src') || $(el).attr('data-url');
-    if (src && src.includes('http')) {
-      let fullUrl = src.startsWith('//') ? 'https:' + src : src;
-      const serverType = detectServerType(fullUrl);
-      servers.push({
-        name: `${serverType} Embed ${servers.length + 1}`,
-        url: fullUrl,
-        type: 'embed',
-        server: serverType
-      });
-    }
-  });
-
-  // Extract from server selection lists
-  $('.server-list, .episode-servers, .video-server, .servers-list').each((i, container) => {
-    const $container = $(container);
-    
-    $container.find('a[data-id], a[data-code], [data-server]').each((j, link) => {
-      const $link = $(link);
-      const serverName = $link.text().trim() || $link.attr('title') || $link.find('span').text();
-      const dataId = $link.attr('data-id') || $link.attr('data-code') || $link.attr('data-server');
+    });
+  } else if (source === 'satoru') {
+    // Enhanced Satoru server extraction
+    $('[data-server], .server-btn, .lang-btn, button, .episode-server').each((i, el) => {
+      const $el = $(el);
+      const serverName = $el.text().trim() || $el.attr('title') || $el.attr('data-lang') || `Server ${servers.length + 1}`;
+      const dataServer = $el.attr('data-server');
+      const dataCode = $el.attr('data-code');
+      const dataId = $el.attr('data-id');
+      const onclick = $el.attr('onclick');
       
-      if (dataId && serverName) {
+      // Extract server URL from various attributes
+      let serverUrl;
+      if (dataServer) {
+        serverUrl = `https://satoru.one/embed/${dataServer}`;
+      } else if (dataCode) {
+        serverUrl = `https://satoru.one/embed/${dataCode}`;
+      } else if (dataId) {
+        serverUrl = `https://satoru.one/embed/${dataId}`;
+      } else if (onclick) {
+        const match = onclick.match(/loadEpisode\(['"]([^'"]+)['"]\)/);
+        if (match) serverUrl = `https://satoru.one/embed/${match[1]}`;
+        
+        const match2 = onclick.match(/['"]([^'"]+embed[^'"]+)['"]/);
+        if (match2) serverUrl = match2[1].startsWith('http') ? match2[1] : `https://satoru.one${match2[1]}`;
+      }
+
+      if (serverUrl) {
+        const serverType = detectServerType(serverUrl) || detectServerFromName(serverName);
         servers.push({
           name: serverName,
-          url: `${baseUrl}/embed/${dataId}`,
-          type: 'constructed',
-          server: detectServerFromName(serverName)
+          url: serverUrl,
+          type: 'embed',
+          server: serverType,
+          source: 'satoru'
         });
       }
     });
-  });
+
+    // Also extract direct iframes
+    $('iframe').each((i, el) => {
+      const src = $(el).attr('src');
+      if (src && src.includes('http')) {
+        let serverUrl = src.startsWith('//') ? 'https:' + src : src;
+        servers.push({
+          name: `Embed ${servers.length + 1}`,
+          url: serverUrl,
+          type: 'iframe',
+          server: detectServerType(serverUrl),
+          source: 'satoru'
+        });
+      }
+    });
+  }
 
   // Remove duplicates based on URL
   const uniqueServers = [];
@@ -341,7 +478,7 @@ async function extractAllServers($, baseUrl) {
     }
   });
 
-  console.log(`Extracted ${uniqueServers.length} unique servers`);
+  console.log(`Extracted ${uniqueServers.length} unique servers from ${source}`);
   return uniqueServers;
 }
 
@@ -385,6 +522,11 @@ function detectServerFromName(serverName) {
   if (nameLower.includes('voe')) return 'Voe';
   if (nameLower.includes('dood')) return 'DoodStream';
   if (nameLower.includes('mixdrop')) return 'MixDrop';
+  if (nameLower.includes('streamtape')) return 'StreamTape';
+  if (nameLower.includes('bn') || nameLower.includes('bangla')) return 'Bangla';
+  if (nameLower.includes('hi') || nameLower.includes('hindi')) return 'Hindi';
+  if (nameLower.includes('en') || nameLower.includes('english')) return 'English';
+  if (nameLower.includes('jp') || nameLower.includes('japanese')) return 'Japanese';
   return serverName;
 }
 
@@ -393,19 +535,21 @@ function detectServerFromName(serverName) {
 // Root endpoint
 app.get('/', (req, res) => {
   res.json({
-    message: 'Ultimate AnimeWorld API - Boss Level',
-    version: '10.0.0',
+    message: 'Ultimate AnimeWorld API - Boss Level v11.0',
+    version: '11.0.0',
     endpoints: {
       '/api/anime/:id/:season/:episode': 'Stream anime episode',
       '/api/auto/:name/:season/:episode': 'Auto-search and stream',
       '/api/random': 'Random anime episode', 
       '/api/iframe?url=URL': 'Clean iframe player',
       '/api/search?q=query': 'Search anime',
-      '/admin': 'Admin panel'
+      '/admin': 'Admin panel',
+      '/health': 'Health check'
     },
     features: [
+      'Multi-source scraping (WatchAnimeWorld + Satoru)',
+      'SQLite caching for fast performance',
       'Auto-search functionality',
-      'Multi-source scraping',
       'Enhanced server detection',
       'Collapsible server selector',
       'Backup source support'
@@ -425,17 +569,15 @@ app.get('/api/anime/:id/:season/:episode', async (req, res) => {
     // Check if anime exists in database
     let dbEntry = animeDatabase[id];
     let usedAutoSearch = false;
-    let searchResults = [];
 
     // If not found in database but autosearch is enabled, try to find it
     if (!dbEntry && autosearch !== 'false') {
       console.log(`Anime ${id} not in database, attempting auto-search...`);
-      const searchQuery = id; // Use ID as search query for auto-search
-      searchResults = await searchAnime(searchQuery);
+      const searchQuery = id;
+      const searchResults = await searchAnime(searchQuery);
       const bestMatch = findBestMatch(searchResults, searchQuery);
       
       if (bestMatch) {
-        // Create a temporary database entry
         dbEntry = {
           slug: bestMatch.slug,
           name: bestMatch.title,
@@ -461,8 +603,27 @@ app.get('/api/anime/:id/:season/:episode', async (req, res) => {
 
     console.log(`Using slug: ${slug} (${animeTitle}) - AutoSearch: ${usedAutoSearch}`);
 
-    // Find episode with enhanced URL patterns
-    const episodeData = await findEpisodeEnhanced(slug, season, episode, animeTitle, usedAutoSearch);
+    // Try cached episode first
+    let episodeData = null;
+    const cachedServers = await getCachedEpisode(slug, season, episode);
+    
+    if (cachedServers && cachedServers.length > 0) {
+      episodeData = {
+        url: `cached-${slug}-${season}x${episode}`,
+        servers: cachedServers,
+        usedPattern: 'cached',
+        source: 'cache',
+        autoSearched: usedAutoSearch
+      };
+      console.log(`Using cached servers for ${slug}`);
+    } else {
+      // Find episode with enhanced URL patterns
+      episodeData = await findEpisodeEnhanced(slug, season, episode, animeTitle, usedAutoSearch);
+      if (episodeData && episodeData.servers.length > 0) {
+        await cacheEpisode(slug, season, episode, episodeData.servers, episodeData.source);
+      }
+    }
+
     if (!episodeData || episodeData.servers.length === 0) {
       apiStats.failedRequests++;
       return res.status(404).json({ 
@@ -501,7 +662,8 @@ app.get('/api/anime/:id/:season/:episode', async (req, res) => {
         servers: episodeData.servers,
         used_pattern: episodeData.usedPattern,
         source: episodeData.source,
-        total_servers: episodeData.servers.length
+        total_servers: episodeData.servers.length,
+        cached: !!cachedServers
       });
     }
 
@@ -517,40 +679,60 @@ app.get('/api/anime/:id/:season/:episode', async (req, res) => {
   }
 });
 
-// NEW: Auto-search endpoint
+// Enhanced Auto-search endpoint with SQLite caching
 app.get('/api/auto/:name/:season/:episode', async (req, res) => {
   try {
     const { name, season, episode } = req.params;
-    const { server, json, clean } = req.query;
+    const { server, json, clean, source } = req.query;
 
     console.log(`Auto-search: ${name} S${season}E${episode}`);
     apiStats.totalRequests++;
     apiStats.autoSearchUsed++;
 
-    // Search for the anime
-    const searchResults = await searchAnime(name);
-    const bestMatch = findBestMatch(searchResults, name);
+    // Check cache first
+    const cachedAnime = await getCachedAnime(name);
+    let animeData = cachedAnime;
 
-    if (!bestMatch) {
-      apiStats.failedRequests++;
-      return res.status(404).json({ 
-        error: 'Anime not found in search',
-        searched_name: name,
-        suggestion: 'Try different spelling or check the anime name'
-      });
+    if (!animeData) {
+      // Perform multi-source search
+      const searchResults = await searchAnime(name);
+      const bestMatch = findBestMatch(searchResults, name);
+
+      if (!bestMatch) {
+        apiStats.failedRequests++;
+        return res.status(404).json({ 
+          error: 'Anime not found in search',
+          searched_name: name,
+          suggestion: 'Try different spelling or check the anime name'
+        });
+      }
+
+      animeData = bestMatch;
+      await cacheAnime(name, animeData.title, animeData.slug, animeData.source);
     }
 
-    const slug = bestMatch.slug;
-    const animeTitle = bestMatch.title;
+    const slug = animeData.slug;
+    const animeTitle = animeData.title;
 
-    console.log(`Found: ${animeTitle} with slug: ${slug}`);
+    console.log(`Found: ${animeTitle} with slug: ${slug} from ${animeData.source}`);
 
-    // Find episode
-    const episodeData = await findEpisodeEnhanced(slug, season, episode, animeTitle, true);
-    if (!episodeData || episodeData.servers.length === 0) {
+    // Get servers with caching
+    let servers = await getCachedEpisode(slug, season, episode);
+    let episodeSource = source || animeData.source;
+    
+    if (!servers || servers.length === 0) {
+      const episodeData = await findEpisodeEnhanced(slug, season, episode, animeTitle, true);
+      if (episodeData && episodeData.servers.length > 0) {
+        servers = episodeData.servers;
+        episodeSource = episodeData.source;
+        await cacheEpisode(slug, season, episode, servers, episodeSource);
+      }
+    }
+
+    if (!servers || servers.length === 0) {
       apiStats.failedRequests++;
       return res.status(404).json({ 
-        error: 'Episode not found',
+        error: 'No servers found',
         anime_title: animeTitle,
         found_slug: slug,
         season: season,
@@ -558,13 +740,13 @@ app.get('/api/auto/:name/:season/:episode', async (req, res) => {
       });
     }
 
-    // Handle server selection
+    // Handle direct server selection
     if (server) {
       const serverIdx = parseInt(server) - 1;
-      if (episodeData.servers[serverIdx]) {
+      if (servers[serverIdx]) {
         apiStats.successfulRequests++;
-        return clean ? sendCleanIframe(res, episodeData.servers[serverIdx].url) 
-                     : sendEnhancedPlayer(res, animeTitle, season, episode, episodeData.servers[serverIdx].url, episodeData.servers);
+        return clean ? sendCleanIframe(res, servers[serverIdx].url) 
+                     : sendEnhancedPlayer(res, animeTitle, season, episode, servers[serverIdx].url, servers);
       }
     }
 
@@ -576,18 +758,17 @@ app.get('/api/auto/:name/:season/:episode', async (req, res) => {
         season: parseInt(season),
         episode: parseInt(episode),
         slug: slug,
+        source: episodeSource,
         auto_searched: true,
-        episodeUrl: episodeData.url,
-        servers: episodeData.servers,
-        used_pattern: episodeData.usedPattern,
-        source: episodeData.source,
-        total_servers: episodeData.servers.length
+        servers: servers,
+        total_servers: servers.length,
+        cached: !!cachedAnime
       });
     }
 
     apiStats.successfulRequests++;
-    return clean ? sendCleanIframe(res, episodeData.servers[0].url)
-                 : sendEnhancedPlayer(res, animeTitle, season, episode, episodeData.servers[0].url, episodeData.servers);
+    return clean ? sendCleanIframe(res, servers[0].url)
+                 : sendEnhancedPlayer(res, animeTitle, season, episode, servers[0].url, servers);
 
   } catch (error) {
     console.error('Auto-search error:', error.message);
@@ -884,11 +1065,6 @@ function sendEnhancedPlayer(res, title, season, episode, videoUrl, servers = [])
                 switchServer(nextServer);
             }
         });
-        
-        // Auto-collapse server panel on mobile after selection
-        function isMobile() {
-            return window.innerWidth <= 768;
-        }
     </script>
 </body>
 </html>`;
@@ -897,7 +1073,7 @@ function sendEnhancedPlayer(res, title, season, episode, videoUrl, servers = [])
   res.send(html);
 }
 
-// Clean iframe endpoint (unchanged)
+// Clean iframe endpoint
 function sendCleanIframe(res, url) {
   const html = `<!DOCTYPE html>
 <html>
@@ -919,9 +1095,9 @@ function sendCleanIframe(res, url) {
   res.send(html);
 }
 
-// ==================== REMAINING ENDPOINTS AND ADMIN PANEL ====================
+// ==================== REMAINING ENDPOINTS ====================
 
-// Random anime endpoint (enhanced with auto-search)
+// Random anime endpoint
 app.get('/api/random', async (req, res) => {
   try {
     const { server, json, clean } = req.query;
@@ -941,7 +1117,20 @@ app.get('/api/random', async (req, res) => {
     const animeTitle = dbEntry.name;
     const slug = dbEntry.slug;
 
-    const episodeData = await findEpisodeEnhanced(slug, season, episode, animeTitle);
+    // Try cache first
+    let servers = await getCachedEpisode(slug, season, episode);
+    let episodeData = null;
+
+    if (servers && servers.length > 0) {
+      episodeData = { servers };
+    } else {
+      episodeData = await findEpisodeEnhanced(slug, season, episode, animeTitle);
+      if (episodeData && episodeData.servers.length > 0) {
+        servers = episodeData.servers;
+        await cacheEpisode(slug, season, episode, servers, episodeData.source);
+      }
+    }
+
     if (!episodeData || episodeData.servers.length === 0) {
       apiStats.failedRequests++;
       return res.status(404).json({ error: 'Random episode not found' });
@@ -986,13 +1175,19 @@ app.get('/api/random', async (req, res) => {
 });
 
 // Health check endpoint
-app.get('/health', (req, res) => {
+app.get('/health', async (req, res) => {
   const successRate = apiStats.totalRequests > 0 ? 
     Math.round((apiStats.successfulRequests / apiStats.totalRequests) * 100) : 0;
+
+  const cacheStats = await sqliteDb.get(`
+    SELECT 
+      (SELECT COUNT(*) FROM anime_cache) as anime_count,
+      (SELECT COUNT(*) FROM episode_cache) as episode_count
+  `);
     
   res.json({ 
     status: 'active', 
-    version: '10.0.0',
+    version: '11.0.0',
     database_entries: Object.keys(animeDatabase).length,
     random_pool: randomAnimePool.length,
     total_requests: apiStats.totalRequests,
@@ -1000,17 +1195,22 @@ app.get('/health', (req, res) => {
     failed_requests: apiStats.failedRequests,
     auto_searches: apiStats.autoSearchUsed,
     success_rate: successRate + '%',
+    cache: cacheStats,
     features: [
+      'Multi-source scraping (WatchAnimeWorld + Satoru)',
+      'SQLite caching system',
       'Auto-search functionality',
-      'Multi-source scraping',
-      'Enhanced server detection',
-      'Collapsible server selector'
+      'Enhanced server detection'
     ]
   });
 });
 
-// Keep your existing admin panel routes (they work fine)
-// ... [Your existing admin routes remain unchanged] ...
+// Clear cache endpoint
+app.delete('/cache', async (req, res) => {
+  await sqliteDb.run('DELETE FROM anime_cache WHERE datetime(created_at) < datetime("now", "-1 day")');
+  await sqliteDb.run('DELETE FROM episode_cache WHERE datetime(created_at) < datetime("now", "-1 hour")');
+  res.json({ message: 'Cache cleared' });
+});
 
 // Initialize and start server
 const PORT = process.env.PORT || 3000;
@@ -1019,21 +1219,19 @@ async function startServer() {
   await loadDatabase();
   app.listen(PORT, () => {
     console.log(`
-🎯 ULTIMATE ANIMEWORLD API v10.0 - BOSS LEVEL
+🎯 ULTIMATE ANIMEWORLD API v11.0 - BOSS LEVEL WITH SQLITE
 ───────────────────────────────────────────
 Port: ${PORT}
 Database: ${Object.keys(animeDatabase).length} anime
 Random Pool: ${randomAnimePool.length} anime
 API: http://localhost:${PORT}
-Admin: http://localhost:${PORT}/admin
 
 🚀 ENHANCED FEATURES:
+• MULTI-SOURCE SCRAPING (WatchAnimeWorld + Satoru.one)
+• SQLITE CACHING - Ultra-fast performance
 • AUTO-SEARCH FUNCTIONALITY - No more database limitations!
-• Multi-source scraping (watchanimeworld.in + animeworld-india.me)
-• Enhanced server detection (VidStream, EarnVids, Abyss, FileMoon, Streamwish, Voe)
+• Enhanced server detection with language support
 • Collapsible server selector with beautiful UI
-• Backup source support
-• Advanced pattern matching
 
 📊 ENDPOINTS:
 • /api/anime/:id/:season/:episode - Stream with auto-search fallback
@@ -1042,10 +1240,12 @@ Admin: http://localhost:${PORT}/admin
 • /api/random - Random content  
 • /api/iframe?url=URL - Clean player
 • /health - Enhanced health check
+• /cache - Clear cache (DELETE)
 
 🎮 USAGE EXAMPLES:
 • Database: /api/anime/21/1/1 (One Piece via ID)
 • Auto-search: /api/auto/bleach/1/1 (Bleach via name)
+• Auto-search: /api/auto/attack%20on%20titan/1/1
 • Search: /api/search?q=naruto shippuden
 ───────────────────────────────────────────
     `);

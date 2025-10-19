@@ -13,109 +13,175 @@ app.use(express.urlencoded({ extended: true }));
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Enhanced anime database with proper slugs
+// Enhanced anime database with proper slugs and season support
 let animeDatabase = {
   // Popular Anime
-  20: { slug: "naruto", name: "Naruto", hasAnilistId: true },
-  21: { slug: "one-piece", name: "One Piece", hasAnilistId: true },
-  16498: { slug: "attack-on-titan", name: "Attack on Titan", hasAnilistId: true },
-  113415: { slug: "jujutsu-kaisen", name: "Jujutsu Kaisen", hasAnilistId: true },
-  101922: { slug: "demon-slayer", name: "Demon Slayer", hasAnilistId: true },
-  127230: { slug: "chainsaw-man", name: "Chainsaw Man", hasAnilistId: true },
-  31964: { slug: "my-hero-academia", name: "My Hero Academia", hasAnilistId: true },
-  21087: { slug: "one-punch-man", name: "One Punch Man", hasAnilistId: true },
+  20: { 
+    slug: "naruto", 
+    name: "Naruto", 
+    hasAnilistId: true,
+    seasons: {
+      1: { anilistId: 20, slug: "naruto" }
+    }
+  },
+  21: { 
+    slug: "one-piece", 
+    name: "One Piece", 
+    hasAnilistId: true,
+    seasons: {
+      1: { anilistId: 21, slug: "one-piece" }
+    }
+  },
+  16498: { 
+    slug: "attack-on-titan", 
+    name: "Attack on Titan", 
+    hasAnilistId: true,
+    seasons: {
+      1: { anilistId: 16498, slug: "attack-on-titan" },
+      2: { anilistId: 25781, slug: "attack-on-titan-season-2" },
+      3: { anilistId: 35760, slug: "attack-on-titan-season-3" },
+      4: { anilistId: 40028, slug: "attack-on-titan-final-season" }
+    }
+  },
+  113415: { 
+    slug: "jujutsu-kaisen", 
+    name: "Jujutsu Kaisen", 
+    hasAnilistId: true,
+    seasons: {
+      1: { anilistId: 113415, slug: "jujutsu-kaisen" },
+      2: { anilistId: 145064, slug: "jujutsu-kaisen-season-2" }
+    }
+  },
+  101922: { 
+    slug: "demon-slayer", 
+    name: "Demon Slayer", 
+    hasAnilistId: true,
+    seasons: {
+      1: { anilistId: 101922, slug: "demon-slayer" },
+      2: { anilistId: 112151, slug: "demon-slayer-entertainment-district" },
+      3: { anilistId: 145064, slug: "demon-slayer-swordsmith-village" }
+    }
+  },
+  127230: { 
+    slug: "chainsaw-man", 
+    name: "Chainsaw Man", 
+    hasAnilistId: true,
+    seasons: {
+      1: { anilistId: 127230, slug: "chainsaw-man" }
+    }
+  },
+  31964: { 
+    slug: "my-hero-academia", 
+    name: "My Hero Academia", 
+    hasAnilistId: true,
+    seasons: {
+      1: { anilistId: 31964, slug: "my-hero-academia" },
+      2: { anilistId: 33486, slug: "my-hero-academia-season-2" },
+      3: { anilistId: 36456, slug: "my-hero-academia-season-3" },
+      4: { anilistId: 38408, slug: "my-hero-academia-season-4" },
+      5: { anilistId: 113415, slug: "my-hero-academia-season-5" },
+      6: { anilistId: 133844, slug: "my-hero-academia-season-6" }
+    }
+  },
+  21087: { 
+    slug: "one-punch-man", 
+    name: "One Punch Man", 
+    hasAnilistId: true,
+    seasons: {
+      1: { anilistId: 21087, slug: "one-punch-man" },
+      2: { anilistId: 107295, slug: "one-punch-man-season-2" }
+    }
+  },
   
   // Cartoons
-  998001: { slug: "ben-10", name: "Ben 10", hasAnilistId: false },
-  998101: { slug: "shinchan", name: "Shinchan", hasAnilistId: false },
-  998201: { slug: "doraemon", name: "Doraemon", hasAnilistId: false },
+  998001: { 
+    slug: "ben-10", 
+    name: "Ben 10", 
+    hasAnilistId: false,
+    seasons: {
+      1: { slug: "ben-10" }
+    }
+  },
+  998101: { 
+    slug: "shinchan", 
+    name: "Shinchan", 
+    hasAnilistId: false,
+    seasons: {
+      1: { slug: "shinchan" }
+    }
+  },
+  998201: { 
+    slug: "doraemon", 
+    name: "Doraemon", 
+    hasAnilistId: false,
+    seasons: {
+      1: { slug: "doraemon" }
+    }
+  },
 
   // NEWLY ADDED ANIME WITH ANILIST IDs
-  20776: { slug: "ghost-in-the-shell-arise", name: "Ghost in the Shell: Arise", hasAnilistId: true },
-  141775: { slug: "shoot-goal-to-the-future", name: "Shoot! Goal to the Future", hasAnilistId: true },
-  1535: { slug: "death-note", name: "Death Note", hasAnilistId: true },
-  162147: { slug: "pokemon-concierge", name: "Pokémon Concierge", hasAnilistId: true },
-  1735: { slug: "naruto-shippuden", name: "Naruto Shippuden", hasAnilistId: true },
-  112608: { slug: "ive-been-killing-slimes-for-300-years", name: "I've Been Killing Slimes for 300 Years and Maxed Out My Level", hasAnilistId: true },
-  124195: { slug: "baki-hanma", name: "Baki Hanma", hasAnilistId: true },
-  177476: { slug: "yaiba-samurai-legend", name: "YAIBA: Samurai Legend", hasAnilistId: true },
-  108463: { slug: "toilet-bound-hanako-kun", name: "Toilet-Bound Hanako-kun", hasAnilistId: true },
-  184574: { slug: "dekin-no-mogura", name: "Dekin no Mogura: The Earthbound Mole", hasAnilistId: true },
-  132405: { slug: "my-dress-up-darling", name: "My Dress-Up Darling", hasAnilistId: true },
-  155838: { slug: "new-saga", name: "New Saga", hasAnilistId: true },
-  153360: { slug: "reborn-as-a-vending-machine", name: "Reborn as a Vending Machine, I Now Wander the Dungeon", hasAnilistId: true },
-  124080: { slug: "horimiya", name: "Horimiya", hasAnilistId: true },
-  137667: { slug: "lord-of-mysteries", name: "Lord of Mysteries", hasAnilistId: true },
-  4264: { slug: "ultraviolet-code-044", name: "Ultraviolet: Code 044", hasAnilistId: true },
-  5505: { slug: "vipers-creed", name: "Viper's Creed", hasAnilistId: true },
-  130706: { slug: "akuma-kun", name: "Akuma Kun", hasAnilistId: true },
-  5039: { slug: "kurozuka", name: "Kurozuka", hasAnilistId: true },
-  5041: { slug: "guin-saga", name: "Guin Saga", hasAnilistId: true },
-  5507: { slug: "valkyria-chronicles", name: "Valkyria Chronicles", hasAnilistId: true },
-  177709: { slug: "sakamoto-days", name: "Sakamoto Days", hasAnilistId: true },
-  177106: { slug: "garouden", name: "Garouden: The Way of the Lone Wolf", hasAnilistId: true },
-  178548: { slug: "even-given-the-worthless-appraiser-class", name: "Even Given the Worthless Appraiser Class, I'm Actually the Strongest", hasAnilistId: true },
-  177887: { slug: "leviathan", name: "Leviathan", hasAnilistId: true },
-  178025: { slug: "gachiakuta", name: "Gachiakuta", hasAnilistId: true },
-  185544: { slug: "welcome-to-the-outcasts-restaurant", name: "Welcome to the Outcast's Restaurant!", hasAnilistId: true },
-  178869: { slug: "clevatess", name: "Clevatess", hasAnilistId: true },
-  150077: { slug: "paradox-live-the-animation", name: "Paradox Live THE ANIMATION", hasAnilistId: true },
-  112649: { slug: "murder-drones", name: "Murder Drones", hasAnilistId: true },
-  125206: { slug: "tsukimichi-moonlit-fantasy", name: "Tsukimichi -Moonlit Fantasy-", hasAnilistId: true },
-  156067: { slug: "campfire-cooking-in-another-world", name: "Campfire Cooking in Another World with My Absurd Skill", hasAnilistId: true },
-  100183: { slug: "sword-art-online-alternative-gun-gale-online", name: "Sword Art Online Alternative: Gun Gale Online", hasAnilistId: true },
-  140960: { slug: "spy-x-family", name: "Spy x Family", hasAnilistId: true },
-  114121: { slug: "the-daily-life-of-the-immortal-king", name: "The Daily Life of the Immortal King", hasAnilistId: true },
-  11757: { slug: "sword-art-online", name: "Sword Art Online", hasAnilistId: true },
-  170083: { slug: "dragon-ball-daima", name: "Dragon Ball Daima", hasAnilistId: true },
-  142877: { slug: "rurouni-kenshin-2023", name: "Rurouni Kenshin (2023)", hasAnilistId: true },
-  185731: { slug: "ranma-2024", name: "Ranma ½ (2024)", hasAnilistId: true },
-  108465: { slug: "mushoku-tensei-jobless-reincarnation", name: "Mushoku Tensei: Jobless Reincarnation", hasAnilistId: true },
-  172190: { slug: "you-are-ms-servant", name: "You are Ms. Servant", hasAnilistId: true },
-  104252: { slug: "demon-lord-retry", name: "Demon Lord, Retry!", hasAnilistId: true },
-  151970: { slug: "shangri-la-frontier", name: "Shangri-La Frontier", hasAnilistId: true },
-  158539: { slug: "lookism", name: "Lookism", hasAnilistId: true },
-  169315: { slug: "trillion-game", name: "Trillion Game", hasAnilistId: true },
-  176053: { slug: "good-bye-dragon-life", name: "Good Bye Dragon Life", hasAnilistId: true },
-  165790: { slug: "365-days-to-the-wedding", name: "365 Days to the Wedding", hasAnilistId: true },
-  171018: { slug: "dan-da-dan", name: "Dan Da Dan", hasAnilistId: true },
-  20755: { slug: "assassination-classroom", name: "Assassination Classroom", hasAnilistId: true },
-  168139: { slug: "ill-become-a-villainess-who-goes-down-in-history", name: "I'll Become a Villainess Who Goes Down in History", hasAnilistId: true },
-  164172: { slug: "tying-the-knot-with-an-amagami-sister", name: "Tying the Knot with an Amagami Sister", hasAnilistId: true },
-  171038: { slug: "nina-the-starry-bride", name: "Nina the Starry Bride", hasAnilistId: true },
-  99423: { slug: "darling-in-the-franxx", name: "Darling in the FranXX", hasAnilistId: true },
-  136307: { slug: "inside-job", name: "Inside Job", hasAnilistId: true },
-  20464: { slug: "haikyu", name: "Haikyu!!", hasAnilistId: true },
-  223: { slug: "dragon-ball", name: "Dragon Ball", hasAnilistId: true },
-  17265: { slug: "log-horizon", name: "Log Horizon", hasAnilistId: true },
-  101348: { slug: "vinland-saga", name: "Vinland Saga", hasAnilistId: true },
-  156023: { slug: "an-archdemons-dilemma", name: "An Archdemon's Dilemma: How to Love Your Elf Bride", hasAnilistId: true },
-  151847: { slug: "why-raeliana-ended-up-at-the-dukes-mansion", name: "Why Raeliana Ended Up at the Duke's Mansion", hasAnilistId: true },
-  148465: { slug: "my-unique-skill-makes-me-op-even-at-level-1", name: "My Unique Skill Makes Me OP Even at Level 1", hasAnilistId: true },
-  155730: { slug: "my-tiny-senpai", name: "My Tiny Senpai", hasAnilistId: true },
-  162985: { slug: "metallic-rouge", name: "Metallic Rouge", hasAnilistId: true },
-  152184: { slug: "true-beauty", name: "True Beauty", hasAnilistId: true },
-  155890: { slug: "bartender-glass-of-god", name: "BARTENDER Glass of God", hasAnilistId: true },
-  105333: { slug: "dr-stone", name: "Dr. STONE", hasAnilistId: true },
-  6509: { slug: "kiteretsu", name: "Kiteretsu", hasAnilistId: true },
-  176273: { slug: "zenshu", name: "ZENSHU", hasAnilistId: true },
-  179297: { slug: "magic-maker", name: "Magic Maker: How to Make Magic in Another World", hasAnilistId: true },
-  165855: { slug: "a-condition-called-love", name: "A Condition Called Love", hasAnilistId: true },
-  140643: { slug: "tokyo-24th-ward", name: "Tokyo 24th Ward", hasAnilistId: true },
-  136428: { slug: "miss-kuroitsu", name: "Miss Kuroitsu From the Monster Development Department", hasAnilistId: true },
-  156891: { slug: "the-weakest-tamer", name: "The Weakest Tamer Began a Journey to Pick Up Trash", hasAnilistId: true },
-  156415: { slug: "i-was-reincarnated-as-the-7th-prince", name: "I Was Reincarnated as the 7th Prince so I Can Take My Time Perfecting My Magical Ability", hasAnilistId: true },
-  151801: { slug: "mashle", name: "Mashle: Magic And Muscles", hasAnilistId: true },
-  155963: { slug: "hokkaido-gals-are-super-adorable", name: "Hokkaido Gals Are Super Adorable!", hasAnilistId: true },
-  165254: { slug: "bucchigiri", name: "BUCCHIGIRI?!", hasAnilistId: true },
-  148116: { slug: "the-iceblade-sorcerer", name: "The Iceblade Sorcerer Shall Rule the World", hasAnilistId: true },
-  151117: { slug: "mononoke-the-movie", name: "Mononoke the Movie: The Phantom in the Rain", hasAnilistId: true },
-  174653: { slug: "viral-hit", name: "Viral Hit", hasAnilistId: true },
-  163270: { slug: "wind-breaker", name: "Wind Breaker", hasAnilistId: true },
-  170206: { slug: "scott-pilgrim-takes-off", name: "Scott Pilgrim Takes Off", hasAnilistId: true },
-  183103: { slug: "invincible", name: "INVINCIBLE", hasAnilistId: true },
-  104490: { slug: "arcane", name: "Arcane", hasAnilistId: true },
-  127271: { slug: "the-dragon-prince", name: "The Dragon Prince", hasAnilistId: true }
+  1535: { 
+    slug: "death-note", 
+    name: "Death Note", 
+    hasAnilistId: true,
+    seasons: {
+      1: { anilistId: 1535, slug: "death-note" }
+    }
+  },
+  1735: { 
+    slug: "naruto-shippuden", 
+    name: "Naruto Shippuden", 
+    hasAnilistId: true,
+    seasons: {
+      1: { anilistId: 1735, slug: "naruto-shippuden" }
+    }
+  },
+  140960: { 
+    slug: "spy-x-family", 
+    name: "Spy x Family", 
+    hasAnilistId: true,
+    seasons: {
+      1: { anilistId: 140960, slug: "spy-x-family" },
+      2: { anilistId: 153167, slug: "spy-x-family-season-2" }
+    }
+  },
+  20755: { 
+    slug: "assassination-classroom", 
+    name: "Assassination Classroom", 
+    hasAnilistId: true,
+    seasons: {
+      1: { anilistId: 20755, slug: "assassination-classroom" },
+      2: { anilistId: 21087, slug: "assassination-classroom-season-2" }
+    }
+  },
+  108465: { 
+    slug: "mushoku-tensei-jobless-reincarnation", 
+    name: "Mushoku Tensei: Jobless Reincarnation", 
+    hasAnilistId: true,
+    seasons: {
+      1: { anilistId: 108465, slug: "mushoku-tensei-jobless-reincarnation" },
+      2: { anilistId: 145064, slug: "mushoku-tensei-season-2" }
+    }
+  },
+  223: { 
+    slug: "dragon-ball", 
+    name: "Dragon Ball", 
+    hasAnilistId: true,
+    seasons: {
+      1: { anilistId: 223, slug: "dragon-ball" }
+    }
+  },
+  11757: { 
+    slug: "sword-art-online", 
+    name: "Sword Art Online", 
+    hasAnilistId: true,
+    seasons: {
+      1: { anilistId: 11757, slug: "sword-art-online" },
+      2: { anilistId: 21877, slug: "sword-art-online-ii" },
+      3: { anilistId: 36456, slug: "sword-art-online-alicization" },
+      4: { anilistId: 105333, slug: "sword-art-online-progressive" }
+    }
+  }
 };
 
 // Updated random anime pool with new popular anime
@@ -172,18 +238,24 @@ const ANILIST_API = 'https://graphql.anilist.co';
 app.get('/', (req, res) => {
   res.json({
     message: 'Ultimate AnimeWorld API',
-    version: '7.0.0',
+    version: '8.0.0',
     endpoints: {
       '/api/anime/:id/:season/:episode': 'Stream anime episode',
       '/api/movie/:id': 'Stream anime movie',
       '/api/random': 'Random anime episode', 
       '/api/iframe?url=URL': 'Clean iframe player',
       '/admin': 'Admin panel'
-    }
+    },
+    features: [
+      'Multi-source scraping (watchanimeworld.in + animeworld-india.me)',
+      'Enhanced server detection (VidStream, EarnVids, Abyss, FileMoon, Streamwish, Voe)',
+      'Multi-season support',
+      'Advanced pattern matching'
+    ]
   });
 });
 
-// Main streaming endpoint - ENHANCED ACCURACY
+// Main streaming endpoint - ENHANCED ACCURACY WITH MULTI-SOURCE
 app.get('/api/anime/:id/:season/:episode', async (req, res) => {
   try {
     const { id, season, episode } = req.params;
@@ -202,13 +274,20 @@ app.get('/api/anime/:id/:season/:episode', async (req, res) => {
       });
     }
 
-    // Use database slug directly
-    const slug = dbEntry.slug;
-    const animeTitle = dbEntry.name;
+    // Use season-specific slug if available
+    let slug = dbEntry.slug;
+    let animeTitle = dbEntry.name;
+    
+    if (dbEntry.seasons && dbEntry.seasons[season]) {
+      const seasonData = dbEntry.seasons[season];
+      slug = seasonData.slug;
+      animeTitle = `${dbEntry.name} Season ${season}`;
+      console.log(`Using season-specific slug: ${slug} for season ${season}`);
+    }
 
-    console.log(`Using database slug: ${slug} (${animeTitle})`);
+    console.log(`Using slug: ${slug} (${animeTitle})`);
 
-    // Find episode with enhanced URL patterns
+    // Find episode with enhanced URL patterns and multi-source support
     const episodeData = await findEpisodeEnhanced(slug, season, episode, animeTitle);
     if (!episodeData || episodeData.servers.length === 0) {
       apiStats.failedRequests++;
@@ -217,7 +296,8 @@ app.get('/api/anime/:id/:season/:episode', async (req, res) => {
         anime_title: animeTitle,
         tried_slug: slug,
         season: season,
-        episode: episode
+        episode: episode,
+        suggestion: 'Try different season or check if episode exists on source sites'
       });
     }
 
@@ -227,7 +307,7 @@ app.get('/api/anime/:id/:season/:episode', async (req, res) => {
       if (episodeData.servers[serverIdx]) {
         apiStats.successfulRequests++;
         return clean ? sendCleanIframe(res, episodeData.servers[serverIdx].url) 
-                     : sendPlayer(res, animeTitle, season, episode, episodeData.servers[serverIdx].url);
+                     : sendPlayer(res, animeTitle, season, episode, episodeData.servers[serverIdx].url, episodeData.servers);
       }
       apiStats.failedRequests++;
       return res.status(404).send('Server not found');
@@ -246,19 +326,41 @@ app.get('/api/anime/:id/:season/:episode', async (req, res) => {
         from_database: true,
         episodeUrl: episodeData.url,
         servers: episodeData.servers,
-        used_pattern: episodeData.usedPattern
+        used_pattern: episodeData.usedPattern,
+        source: episodeData.source,
+        total_servers: episodeData.servers.length
       });
     }
 
     // Default: send player
     apiStats.successfulRequests++;
     return clean ? sendCleanIframe(res, episodeData.servers[0].url)
-                 : sendPlayer(res, animeTitle, season, episode, episodeData.servers[0].url);
+                 : sendPlayer(res, animeTitle, season, episode, episodeData.servers[0].url, episodeData.servers);
 
   } catch (error) {
     console.error('Error:', error.message);
     apiStats.failedRequests++;
     res.status(500).json({ error: 'Server error', details: error.message });
+  }
+});
+
+// Movie endpoint (placeholder - can be implemented similarly)
+app.get('/api/movie/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { json, clean } = req.query;
+
+    apiStats.totalRequests++;
+    
+    // Similar logic as episode endpoint but for movies
+    res.json({
+      message: 'Movie endpoint - implement similar to episode endpoint',
+      id: id
+    });
+  } catch (error) {
+    console.error('Movie error:', error.message);
+    apiStats.failedRequests++;
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
@@ -293,7 +395,7 @@ app.get('/api/random', async (req, res) => {
       if (episodeData.servers[serverIdx]) {
         apiStats.successfulRequests++;
         return clean ? sendCleanIframe(res, episodeData.servers[serverIdx].url)
-                     : sendPlayer(res, animeTitle, season, episode, episodeData.servers[serverIdx].url);
+                     : sendPlayer(res, animeTitle, season, episode, episodeData.servers[serverIdx].url, episodeData.servers);
       }
       apiStats.failedRequests++;
       return res.status(404).send('Server not found');
@@ -312,13 +414,14 @@ app.get('/api/random', async (req, res) => {
         episodeUrl: episodeData.url,
         servers: episodeData.servers,
         is_random: true,
-        used_pattern: episodeData.usedPattern
+        used_pattern: episodeData.usedPattern,
+        source: episodeData.source
       });
     }
 
     apiStats.successfulRequests++;
     return clean ? sendCleanIframe(res, episodeData.servers[0].url)
-                 : sendPlayer(res, animeTitle, season, episode, episodeData.servers[0].url);
+                 : sendPlayer(res, animeTitle, season, episode, episodeData.servers[0].url, episodeData.servers);
 
   } catch (error) {
     console.error('Random error:', error.message);
@@ -342,90 +445,121 @@ app.get('/health', (req, res) => {
     
   res.json({ 
     status: 'active', 
-    version: '7.0.0',
+    version: '8.0.0',
     database_entries: Object.keys(animeDatabase).length,
     random_pool: randomAnimePool.length,
     total_requests: apiStats.totalRequests,
     successful_requests: apiStats.successfulRequests,
     failed_requests: apiStats.failedRequests,
-    success_rate: successRate
+    success_rate: successRate + '%',
+    features: [
+      'Multi-source scraping',
+      'Enhanced server detection',
+      'Multi-season support'
+    ]
   });
 });
 
 // ==================== ENHANCED CORE FUNCTIONS ====================
 
-// ENHANCED: Better episode finder with improved patterns
+// ENHANCED: Better episode finder with improved patterns and multi-source support
 async function findEpisodeEnhanced(slug, season, episode, animeTitle = "") {
-  const baseUrl = 'https://watchanimeworld.in';
-  
-  console.log(`Enhanced search for: ${slug} S${season}E${episode}`);
-
-  // Enhanced URL patterns based on actual website analysis
-  const patterns = [
-    // Primary pattern: /episode/slug-seasonxepisode/
-    {
-      url: `${baseUrl}/episode/${slug}-${season}x${episode}/`,
-      name: 'episode-seasonxepisode'
-    },
-    // Alternative pattern: /episode/slug-sXXeXX/
-    {
-      url: `${baseUrl}/episode/${slug}-s${season.toString().padStart(2, '0')}e${episode.toString().padStart(2, '0')}/`,
-      name: 'episode-sXXeXX'
-    },
-    // Simple episode pattern
-    {
-      url: `${baseUrl}/episode/${slug}-episode-${episode}/`,
-      name: 'episode-simple'
-    },
-    // Full format pattern
-    {
-      url: `${baseUrl}/episode/${slug}-season-${season}-episode-${episode}/`,
-      name: 'episode-full'
-    },
-    // Series format
-    {
-      url: `${baseUrl}/series/${slug}/season-${season}/episode-${episode}/`,
-      name: 'series-season-episode'
-    },
-    // Anime format
-    {
-      url: `${baseUrl}/anime/${slug}/episode-${episode}/`,
-      name: 'anime-episode'
-    },
-    // TV format
-    {
-      url: `${baseUrl}/tv/${slug}/episode-${episode}/`,
-      name: 'tv-episode'
-    },
-    // Watch format
-    {
-      url: `${baseUrl}/watch/${slug}/episode-${episode}/`,
-      name: 'watch-episode'
-    }
+  const baseUrls = [
+    'https://watchanimeworld.in',
+    'https://animeworld-india.me'  // Added backup source
   ];
 
+  console.log(`Enhanced search for: ${slug} S${season}E${episode}`);
+
+  // Enhanced URL patterns for BOTH sites
+  const patterns = [];
+  
+  baseUrls.forEach(baseUrl => {
+    patterns.push(
+      // Primary pattern: /episode/slug-seasonxepisode/ (your working example)
+      {
+        url: `${baseUrl}/episode/${slug}-${season}x${episode}/`,
+        name: 'episode-seasonxepisode',
+        source: baseUrl
+      },
+      // Alternative pattern: /episode/slug-sXXeXX/
+      {
+        url: `${baseUrl}/episode/${slug}-s${season.toString().padStart(2, '0')}e${episode.toString().padStart(2, '0')}/`,
+        name: 'episode-sXXeXX',
+        source: baseUrl
+      },
+      // Simple episode pattern
+      {
+        url: `${baseUrl}/episode/${slug}-episode-${episode}/`,
+        name: 'episode-simple',
+        source: baseUrl
+      },
+      // Full format pattern
+      {
+        url: `${baseUrl}/episode/${slug}-season-${season}-episode-${episode}/`,
+        name: 'episode-full',
+        source: baseUrl
+      },
+      // Series format
+      {
+        url: `${baseUrl}/series/${slug}/season-${season}/episode-${episode}/`,
+        name: 'series-season-episode',
+        source: baseUrl
+      },
+      // Direct anime format
+      {
+        url: `${baseUrl}/anime/${slug}/episode-${episode}/`,
+        name: 'anime-episode',
+        source: baseUrl
+      },
+      // TV format
+      {
+        url: `${baseUrl}/tv/${slug}/episode-${episode}/`,
+        name: 'tv-episode',
+        source: baseUrl
+      },
+      // Watch format
+      {
+        url: `${baseUrl}/watch/${slug}/episode-${episode}/`,
+        name: 'watch-episode',
+        source: baseUrl
+      },
+      // Season-less pattern (for single season anime)
+      {
+        url: `${baseUrl}/episode/${slug}-${episode}/`,
+        name: 'episode-no-season',
+        source: baseUrl
+      }
+    );
+  });
+
   for (const pattern of patterns) {
-    console.log(`Trying pattern: ${pattern.name} - ${pattern.url}`);
+    console.log(`Trying pattern: ${pattern.name} from ${pattern.source}`);
     
     try {
       const response = await axios.get(pattern.url, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
           'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-          'Referer': 'https://watchanimeworld.in/'
+          'Referer': pattern.source + '/',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Accept-Encoding': 'gzip, deflate, br'
         },
         timeout: 10000,
-        validateStatus: (status) => status < 500 // Don't retry server errors
+        validateStatus: (status) => status < 500
       });
 
       console.log(`Response status: ${response.status} for ${pattern.name}`);
 
-      // Check if page actually exists (not 404)
+      // Enhanced page existence checks
       if (response.status === 404 || 
           response.data.includes('404') || 
           response.data.includes('Not Found') ||
-          response.data.includes('Page Not Found')) {
-        console.log(`404 for: ${pattern.name}`);
+          response.data.includes('Page Not Found') ||
+          response.data.includes('episode not found') ||
+          response.data.toLowerCase().includes('sorry, the episode you are looking for') ||
+          response.data.includes('Oops! That page can\'t be found')) {
+        console.log(`Episode not found with: ${pattern.name}`);
         continue;
       }
 
@@ -434,100 +568,18 @@ async function findEpisodeEnhanced(slug, season, episode, animeTitle = "") {
         continue;
       }
 
+      // Enhanced iframe extraction for multiple servers
       const $ = load(response.data);
-      const servers = [];
-
-      // Enhanced iframe extraction with multiple attributes
-      $('iframe').each((i, el) => {
-        let src = $(el).attr('src') || $(el).attr('data-src') || $(el).attr('data-url');
-        if (src) {
-          // Handle protocol-relative URLs
-          if (src.startsWith('//')) {
-            src = 'https:' + src;
-          }
-          // Handle relative URLs
-          else if (src.startsWith('/')) {
-            src = baseUrl + src;
-          }
-          
-          // Only add valid URLs
-          if (src.startsWith('http')) {
-            servers.push({
-              name: `Server ${servers.length + 1}`,
-              url: src,
-              type: 'iframe',
-              server: detectServer(src)
-            });
-            console.log(`Found iframe: ${src}`);
-          }
-        }
-      });
-
-      // Look for video players with data attributes
-      $('[data-player], [data-video], [data-src], [data-url]').each((i, el) => {
-        const src = $(el).attr('data-player') || $(el).attr('data-video') || $(el).attr('data-src') || $(el).attr('data-url');
-        if (src && src.includes('http')) {
-          let fullUrl = src.startsWith('//') ? 'https:' + src : src;
-          servers.push({
-            name: `Embed Server ${servers.length + 1}`,
-            url: fullUrl,
-            type: 'embed',
-            server: detectServer(fullUrl)
-          });
-          console.log(`Found embed: ${fullUrl}`);
-        }
-      });
-
-      // Look for video elements with sources
-      $('video').each((i, el) => {
-        const $video = $(el);
-        const src = $video.attr('src');
-        if (src && src.startsWith('http')) {
-          servers.push({
-            name: `Direct Video ${servers.length + 1}`,
-            url: src,
-            type: 'direct',
-            server: 'Direct'
-          });
-        }
-        
-        // Check video sources
-        $video.find('source').each((j, source) => {
-          const sourceSrc = $(source).attr('src');
-          if (sourceSrc && sourceSrc.startsWith('http')) {
-            servers.push({
-              name: `Video Source ${servers.length + 1}`,
-              url: sourceSrc,
-              type: 'direct',
-              server: 'Direct'
-            });
-          }
-        });
-      });
-
-      // Look for script variables containing video URLs
-      const scriptText = $('script').text();
-      const videoUrlMatches = scriptText.match(/(https?:\/\/[^"'\s]*\.(mp4|m3u8|webm)[^"'\s]*)/gi);
-      if (videoUrlMatches) {
-        videoUrlMatches.forEach(url => {
-          if (url.includes('video') || url.includes('stream')) {
-            servers.push({
-              name: `Script Video ${servers.length + 1}`,
-              url: url,
-              type: 'direct',
-              server: 'Direct'
-            });
-          }
-        });
-      }
-
+      const servers = await extractAllServers($, pattern.source);
+      
       if (servers.length > 0) {
         console.log(`Success with pattern ${pattern.name}! Found ${servers.length} servers`);
         await saveDatabase(); // Save stats
         return { 
           url: pattern.url, 
           servers,
-          usedPattern: pattern.name
+          usedPattern: pattern.name,
+          source: pattern.source
         };
       } else {
         console.log(`No video sources found with pattern: ${pattern.name}`);
@@ -543,8 +595,136 @@ async function findEpisodeEnhanced(slug, season, episode, animeTitle = "") {
   return null;
 }
 
-// Detect server from URL
-function detectServer(url) {
+// Enhanced server extraction for multiple providers
+async function extractAllServers($, baseUrl) {
+  const servers = [];
+  
+  // Enhanced iframe extraction with multiple attributes
+  $('iframe').each((i, el) => {
+    let src = $(el).attr('src') || $(el).attr('data-src') || $(el).attr('data-url') || $(el).attr('data-player');
+    if (src) {
+      // Handle protocol-relative URLs
+      if (src.startsWith('//')) {
+        src = 'https:' + src;
+      }
+      // Handle relative URLs
+      else if (src.startsWith('/')) {
+        src = baseUrl + src;
+      }
+      
+      // Only add valid URLs
+      if (src.startsWith('http')) {
+        const serverType = detectServerType(src);
+        servers.push({
+          name: `${serverType} Server ${servers.length + 1}`,
+          url: src,
+          type: 'iframe',
+          server: serverType
+        });
+        console.log(`Found iframe: ${src} (${serverType})`);
+      }
+    }
+  });
+
+  // Extract from server selection buttons/dropdowns
+  $('[data-player], [data-video], [data-src], [data-url]').each((i, el) => {
+    const src = $(el).attr('data-player') || $(el).attr('data-video') || $(el).attr('data-src') || $(el).attr('data-url');
+    if (src && src.includes('http')) {
+      let fullUrl = src.startsWith('//') ? 'https:' + src : src;
+      const serverType = detectServerType(fullUrl);
+      servers.push({
+        name: `${serverType} Embed ${servers.length + 1}`,
+        url: fullUrl,
+        type: 'embed',
+        server: serverType
+      });
+      console.log(`Found embed: ${fullUrl}`);
+    }
+  });
+
+  // Extract from server selection lists
+  $('.server-list, .episode-servers, .video-server, .servers-list').each((i, container) => {
+    const $container = $(container);
+    const serverText = $container.text().toLowerCase();
+    
+    // Look for server links
+    $container.find('a[data-id], a[data-code], [data-server]').each((j, link) => {
+      const $link = $(link);
+      const serverName = $link.text().trim() || $link.attr('title') || $link.find('span').text();
+      const dataId = $link.attr('data-id') || $link.attr('data-code') || $link.attr('data-server');
+      
+      if (dataId && serverName) {
+        servers.push({
+          name: serverName,
+          url: `${baseUrl}/embed/${dataId}`, // Construct embed URL
+          type: 'constructed',
+          server: detectServerFromName(serverName)
+        });
+      }
+    });
+  });
+
+  // Look for video elements with sources
+  $('video').each((i, el) => {
+    const $video = $(el);
+    const src = $video.attr('src');
+    if (src && src.startsWith('http')) {
+      servers.push({
+        name: `Direct Video ${servers.length + 1}`,
+        url: src,
+        type: 'direct',
+        server: 'Direct'
+      });
+    }
+    
+    // Check video sources
+    $video.find('source').each((j, source) => {
+      const sourceSrc = $(source).attr('src');
+      if (sourceSrc && sourceSrc.startsWith('http')) {
+        servers.push({
+          name: `Video Source ${servers.length + 1}`,
+          url: sourceSrc,
+          type: 'direct',
+          server: 'Direct'
+        });
+      }
+    });
+  });
+
+  // Look for script variables containing video URLs
+  const scriptText = $('script').text();
+  const videoUrlMatches = scriptText.match(/(https?:\/\/[^"'\s]*\.(mp4|m3u8|webm)[^"'\s]*)/gi);
+  if (videoUrlMatches) {
+    videoUrlMatches.forEach(url => {
+      if (url.includes('video') || url.includes('stream') || url.includes('m3u8')) {
+        servers.push({
+          name: `Script Video ${servers.length + 1}`,
+          url: url,
+          type: 'direct',
+          server: 'Direct'
+        });
+      }
+    });
+  }
+
+  // Remove duplicates based on URL
+  const uniqueServers = [];
+  const seenUrls = new Set();
+  
+  servers.forEach(server => {
+    if (!seenUrls.has(server.url)) {
+      seenUrls.add(server.url);
+      uniqueServers.push(server);
+    }
+  });
+
+  console.log(`Extracted ${uniqueServers.length} unique servers`);
+  return uniqueServers;
+}
+
+// Enhanced server type detection
+function detectServerType(url) {
+  const urlLower = url.toLowerCase();
   const serverMap = {
     'streamtape': 'StreamTape',
     'dood': 'DoodStream',
@@ -553,17 +733,37 @@ function detectServer(url) {
     'mp4upload': 'Mp4Upload',
     'vidstream': 'VidStream',
     'gogostream': 'GogoStream',
+    'voee': 'Voe',
+    'voe': 'Voe',
+    'earnvid': 'EarnVids',
+    'earnvids': 'EarnVids',
+    'abyss': 'Abyss',
+    'streamwish': 'Streamwish',
     'play.zephyrflick': 'ZephyrFlick',
     'vidsrc': 'VidSrc',
     'vidsrc.pro': 'VidSrc Pro',
-    '2embed': '2Embed'
+    '2embed': '2Embed',
+    'dokicloud': 'DokiCloud',
+    'sblona': 'Sblona'
   };
 
-  const urlLower = url.toLowerCase();
   for (const [key, name] of Object.entries(serverMap)) {
     if (urlLower.includes(key)) return name;
   }
   return 'Unknown Server';
+}
+
+function detectServerFromName(serverName) {
+  const nameLower = serverName.toLowerCase();
+  if (nameLower.includes('vidstream') || nameLower.includes('vid-stream')) return 'VidStream';
+  if (nameLower.includes('earnvid') || nameLower.includes('earn-vid')) return 'EarnVids';
+  if (nameLower.includes('abyss')) return 'Abyss';
+  if (nameLower.includes('filemoon') || nameLower.includes('file-moon')) return 'FileMoon';
+  if (nameLower.includes('streamwish') || nameLower.includes('stream-wish')) return 'Streamwish';
+  if (nameLower.includes('voe')) return 'Voe';
+  if (nameLower.includes('dood')) return 'DoodStream';
+  if (nameLower.includes('mixdrop')) return 'MixDrop';
+  return serverName;
 }
 
 // ULTRA-FAST IFRAME PLAYER
@@ -602,8 +802,12 @@ function sendCleanIframe(res, url) {
   res.send(html);
 }
 
-// Enhanced player with navigation
-function sendPlayer(res, title, season, episode, videoUrl) {
+// Enhanced player with navigation and server selection
+function sendPlayer(res, title, season, episode, videoUrl, servers = []) {
+  const serversHtml = servers.map((server, index) => 
+    `<button onclick="switchServer(${index})" class="server-btn">${server.server || 'Server'} ${index + 1}</button>`
+  ).join('');
+
   const html = `<!DOCTYPE html>
 <html>
 <head>
@@ -647,18 +851,130 @@ function sendPlayer(res, title, season, episode, videoUrl) {
             font-size: 12px;
             backdrop-filter: blur(10px);
         }
+        .server-selector {
+            position: fixed;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.8);
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+        }
+        .server-btn {
+            background: #5865f2;
+            border: none;
+            color: white;
+            padding: 5px 10px;
+            margin: 2px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 11px;
+        }
+        .server-btn:hover {
+            background: #4752c4;
+        }
     </style>
 </head>
 <body>
     <div class="player-info">${title} - S${season}E${episode}</div>
+    ${servers.length > 1 ? `<div class="server-selector">${serversHtml}</div>` : ''}
     <div class="player-container">
         <iframe src="${videoUrl}" allow="autoplay; fullscreen; encrypted-media" allowfullscreen></iframe>
     </div>
+    
+    <script>
+        function switchServer(serverIndex) {
+            const servers = ${JSON.stringify(servers)};
+            if (servers[serverIndex]) {
+                document.querySelector('iframe').src = servers[serverIndex].url;
+            }
+        }
+        
+        // Handle iframe errors
+        document.querySelector('iframe').addEventListener('error', function() {
+            console.log('Iframe loading error');
+        });
+    </script>
 </body>
 </html>`;
 
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.send(html);
+}
+
+// ==================== MULTI-SEASON SUPPORT ====================
+
+// Multi-season support
+async function getSeasonsForAnime(anilistId) {
+  try {
+    const query = `
+      query ($id: Int) {
+        Media (id: $id, type: ANIME) {
+          title {
+            romaji
+            english
+            native
+          }
+          relations {
+            edges {
+              node {
+                id
+                title {
+                  romaji
+                  english
+                }
+                type
+                format
+              }
+              relationType
+            }
+          }
+        }
+      }
+    `;
+
+    const response = await axios.post(ANILIST_API, {
+      query,
+      variables: { id: parseInt(anilistId) }
+    }, { timeout: 8000 });
+
+    if (response.data.data?.Media) {
+      const media = response.data.data.Media;
+      const seasons = [];
+      
+      // Add main series
+      seasons.push({
+        id: media.id,
+        title: media.title.english || media.title.romaji,
+        seasonNumber: 1,
+        isMain: true,
+        slug: slugify(media.title.english || media.title.romaji)
+      });
+
+      // Add related seasons (sequels, prequels)
+      if (media.relations && media.relations.edges) {
+        media.relations.edges.forEach(edge => {
+          if (edge.relationType === 'SEQUEL' || edge.relationType === 'PREQUEL') {
+            seasons.push({
+              id: edge.node.id,
+              title: edge.node.title.english || edge.node.title.romaji,
+              seasonNumber: seasons.length + 1,
+              relationType: edge.relationType,
+              isMain: false,
+              slug: slugify(edge.node.title.english || edge.node.title.romaji)
+            });
+          }
+        });
+      }
+
+      return seasons;
+    }
+    return null;
+  } catch (error) {
+    console.log(`Failed to fetch seasons for ${anilistId}:`, error.message);
+    return null;
+  }
 }
 
 // ==================== ENHANCED ADMIN PANEL ROUTES ====================
@@ -695,14 +1011,15 @@ app.get('/admin/stats', (req, res) => {
       id: parseInt(id),
       name: entry.name,
       slug: entry.slug,
-      hasAnilistId: entry.hasAnilistId
+      hasAnilistId: entry.hasAnilistId,
+      seasons: entry.seasons ? Object.keys(entry.seasons).length : 1
     }))
   });
 });
 
 // Add anime to database
 app.post('/admin/anime', async (req, res) => {
-  const { id, name, slug, hasAnilistId } = req.body;
+  const { id, name, slug, hasAnilistId, seasons } = req.body;
 
   if (!id || !name || !slug) {
     return res.status(400).json({ error: 'ID, name, and slug are required' });
@@ -712,7 +1029,10 @@ app.post('/admin/anime', async (req, res) => {
   animeDatabase[id] = {
     slug: slug,
     name: name,
-    hasAnilistId: hasAnilistId || false
+    hasAnilistId: hasAnilistId || false,
+    seasons: seasons || {
+      1: { slug: slug, ...(hasAnilistId && { anilistId: parseInt(id) }) }
+    }
   };
 
   // Add to random pool if it has AniList ID
@@ -725,7 +1045,7 @@ app.post('/admin/anime', async (req, res) => {
   res.json({ 
     success: true, 
     message: 'Anime added to database',
-    anime: { id, name, slug, hasAnilistId }
+    anime: { id, name, slug, hasAnilistId, seasons: seasons ? Object.keys(seasons).length : 1 }
   });
 });
 
@@ -756,6 +1076,30 @@ app.post('/admin/fetch-info', async (req, res) => {
     }
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch anime info' });
+  }
+});
+
+// Fetch seasons for anime
+app.post('/admin/fetch-seasons', async (req, res) => {
+  const { id } = req.body;
+
+  if (!id) {
+    return res.status(400).json({ error: 'ID is required' });
+  }
+
+  try {
+    const seasons = await getSeasonsForAnime(id);
+    if (seasons) {
+      res.json({
+        success: true,
+        seasons: seasons,
+        mainTitle: seasons[0]?.title || 'Unknown'
+      });
+    } else {
+      res.status(404).json({ error: 'No seasons found' });
+    }
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch seasons' });
   }
 });
 
@@ -796,12 +1140,14 @@ app.post('/admin/test-anime', async (req, res) => {
         url: testData.url,
         servers: testData.servers,
         serverCount: testData.servers.length,
-        usedPattern: testData.usedPattern
+        usedPattern: testData.usedPattern,
+        source: testData.source
       });
     } else {
       res.status(404).json({ 
         success: false, 
-        error: `No episode found for slug: ${slug}`
+        error: `No episode found for slug: ${slug}`,
+        suggestion: 'Try different season or check if the episode exists on source sites'
       });
     }
   } catch (error) {
@@ -874,7 +1220,7 @@ app.get('/admin', (req, res) => {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AnimeWorld API - Admin Panel</title>
+    <title>AnimeWorld API - Admin Panel v8.0</title>
     <style>
         :root {
             --sidebar-width: 260px;
@@ -1377,13 +1723,26 @@ app.get('/admin', (req, res) => {
             cursor: pointer;
             padding: 10px;
         }
+        
+        /* Season Management */
+        .seasons-container {
+            margin-top: 15px;
+        }
+        
+        .season-item {
+            background: var(--primary);
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 5px;
+            border: 1px solid var(--border);
+        }
     </style>
 </head>
 <body>
     <div id="loginPage" class="login-container">
         <div class="login-box">
             <div class="login-logo">AnimeWorld</div>
-            <div class="login-subtitle">Admin Panel v7.0</div>
+            <div class="login-subtitle">Admin Panel v8.0 - Enhanced Multi-Source</div>
             <input type="password" id="password" placeholder="Enter admin password" style="margin-bottom: 15px;">
             <button onclick="login()" style="width: 100%;">Login</button>
             <div id="loginMessage" style="margin-top: 15px;"></div>
@@ -1395,7 +1754,7 @@ app.get('/admin', (req, res) => {
         <div class="sidebar" id="sidebar">
             <div class="sidebar-header">
                 <div class="sidebar-logo">AnimeWorld</div>
-                <div class="sidebar-version">v7.0 Admin</div>
+                <div class="sidebar-version">v8.0 Enhanced</div>
             </div>
             
             <div class="nav-section">
@@ -1437,6 +1796,18 @@ app.get('/admin', (req, res) => {
                     Export DB
                 </div>
             </div>
+            
+            <div class="nav-section">
+                <div class="nav-title">Sources</div>
+                <div class="nav-item">
+                    <span class="nav-icon">🌐</span>
+                    watchanimeworld.in
+                </div>
+                <div class="nav-item">
+                    <span class="nav-icon">🌐</span>
+                    animeworld-india.me
+                </div>
+            </div>
         </div>
 
         <!-- Main Content -->
@@ -1474,6 +1845,28 @@ app.get('/admin', (req, res) => {
                     </div>
 
                     <div class="form-section">
+                        <h3>🚀 Enhanced Features</h3>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">
+                            <div style="background: var(--primary); padding: 15px; border-radius: 6px; border-left: 4px solid var(--accent);">
+                                <strong>Multi-Source Support</strong>
+                                <div style="font-size: 0.8em; color: var(--text-muted); margin-top: 5px;">watchanimeworld.in + animeworld-india.me</div>
+                            </div>
+                            <div style="background: var(--primary); padding: 15px; border-radius: 6px; border-left: 4px solid var(--success);">
+                                <strong>Enhanced Server Detection</strong>
+                                <div style="font-size: 0.8em; color: var(--text-muted); margin-top: 5px;">VidStream, EarnVids, Abyss, FileMoon, Streamwish, Voe</div>
+                            </div>
+                            <div style="background: var(--primary); padding: 15px; border-radius: 6px; border-left: 4px solid var(--warning);">
+                                <strong>Multi-Season Support</strong>
+                                <div style="font-size: 0.8em; color: var(--text-muted); margin-top: 5px;">Different AniList IDs for seasons</div>
+                            </div>
+                            <div style="background: var(--primary); padding: 15px; border-radius: 6px; border-left: 4px solid var(--accent);">
+                                <strong>Advanced Pattern Matching</strong>
+                                <div style="font-size: 0.8em; color: var(--text-muted); margin-top: 5px;">8+ URL patterns per source</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-section">
                         <h3>Quick Actions</h3>
                         <div class="form-grid">
                             <div>
@@ -1481,6 +1874,9 @@ app.get('/admin', (req, res) => {
                             </div>
                             <div>
                                 <button onclick="switchTab('testPlayers')" class="warning">Test Players</button>
+                            </div>
+                            <div>
+                                <button onclick="testMultiSource()" class="success">Test Multi-Source</button>
                             </div>
                         </div>
                     </div>
@@ -1510,6 +1906,7 @@ app.get('/admin', (req, res) => {
                                         <th>Name</th>
                                         <th>Slug</th>
                                         <th>Type</th>
+                                        <th>Seasons</th>
                                         <th>Actions</th>
                                     </tr>
                                 </thead>
@@ -1562,15 +1959,17 @@ app.get('/admin', (req, res) => {
                             </div>
                             <div>
                                 <button onclick="fetchAnimeInfo()">Fetch Info</button>
+                                <button onclick="fetchSeasons()" class="warning" style="margin-top: 10px;">Fetch Seasons</button>
                             </div>
                         </div>
                         <div id="fetchMessage"></div>
+                        <div id="seasonsList" class="seasons-container"></div>
                     </div>
                 </div>
 
                 <!-- Test Players Tab -->
                 <div id="testPlayers" class="tab-content">
-                    <h2>Test Players</h2>
+                    <h2>Test Players - Multi-Source</h2>
                     <div class="form-section">
                         <h3>Test Anime URLs</h3>
                         <div class="form-grid">
@@ -1592,8 +1991,12 @@ app.get('/admin', (req, res) => {
                                 <div class="url-preview">
                                     <strong>Testing URL Patterns:</strong><br>
                                     <span id="testUrlPreview">/episode/one-piece-1x1/</span>
+                                    <div style="margin-top: 10px; font-size: 0.8em; color: var(--text-muted);">
+                                        <strong>Sources:</strong> watchanimeworld.in, animeworld-india.me<br>
+                                        <strong>Patterns:</strong> 8+ patterns per source
+                                    </div>
                                 </div>
-                                <button onclick="testAnimeUrl()" class="warning" style="margin-top: 15px;">Test All Patterns</button>
+                                <button onclick="testAnimeUrl()" class="warning" style="margin-top: 15px;">Test All Patterns & Sources</button>
                             </div>
                         </div>
                         <div id="testResults"></div>
@@ -1641,7 +2044,7 @@ app.get('/admin', (req, res) => {
         function switchTab(tabName) {
             // Update navigation
             document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
-            event.target.classList.add('active');
+            event.currentTarget.classList.add('active');
             
             // Update content
             document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
@@ -1706,7 +2109,7 @@ app.get('/admin', (req, res) => {
             const activity = data.database.slice(-5).reverse().map(anime => 
                 '<div style="padding: 10px; border-bottom: 1px solid var(--border);">' +
                     '<strong>' + anime.name + '</strong> (ID: ' + anime.id + ')' +
-                    '<div style="font-size: 0.8em; color: var(--text-muted);">Slug: ' + anime.slug + '</div>' +
+                    '<div style="font-size: 0.8em; color: var(--text-muted);">Slug: ' + anime.slug + ' | Seasons: ' + (anime.seasons || 1) + '</div>' +
                 '</div>'
             ).join('');
             document.getElementById('recentActivity').innerHTML = activity || 'No recent activity';
@@ -1724,6 +2127,7 @@ app.get('/admin', (req, res) => {
                     '<td><strong>' + anime.name + '</strong></td>' +
                     '<td><code>' + anime.slug + '</code></td>' +
                     '<td>' + (anime.hasAnilistId ? 'AniList' : 'Custom') + '</td>' +
+                    '<td>' + (anime.seasons || 1) + '</td>' +
                     '<td class="anime-actions">' +
                         '<button class="btn-sm warning" onclick="testAnimeById(' + anime.id + ')">Test</button>' +
                         '<button class="btn-sm danger" onclick="deleteAnime(' + anime.id + ')">Delete</button>' +
@@ -1795,6 +2199,33 @@ app.get('/admin', (req, res) => {
             }
         }
 
+        async function fetchSeasons() {
+            const id = document.getElementById('fetchAnilistId').value;
+            if (!id) return alert('Enter AniList ID');
+
+            const response = await fetch('/admin/fetch-seasons', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id })
+            });
+
+            const data = await response.json();
+            const seasonsList = document.getElementById('seasonsList');
+            
+            if (data.success) {
+                let seasonsHtml = '<h4>Found Seasons:</h4>';
+                data.seasons.forEach(season => {
+                    seasonsHtml += '<div class="season-item">' +
+                        '<strong>Season ' + season.seasonNumber + ':</strong> ' + season.title +
+                        '<div style="font-size: 0.8em; color: var(--text-muted);">ID: ' + season.id + ' | Slug: ' + season.slug + '</div>' +
+                        '</div>';
+                });
+                seasonsList.innerHTML = seasonsHtml;
+            } else {
+                seasonsList.innerHTML = '<div class="message error">' + data.error + '</div>';
+            }
+        }
+
         async function deleteAnime(id) {
             if (!confirm('Are you sure you want to delete this anime?')) return;
 
@@ -1818,7 +2249,7 @@ app.get('/admin', (req, res) => {
 
             const resultsDiv = document.getElementById('testResults');
             const playersDiv = document.getElementById('playerPreviews');
-            resultsDiv.innerHTML = '<div class="message info">Testing all URL patterns... Please wait</div>';
+            resultsDiv.innerHTML = '<div class="message info">Testing all URL patterns across both sources... Please wait</div>';
             playersDiv.innerHTML = '';
 
             const response = await fetch('/admin/test-anime', {
@@ -1843,7 +2274,7 @@ app.get('/admin', (req, res) => {
                     data.servers.forEach((server, index) => {
                         serversHtml += '<div class="server-item">' +
                             '<strong>Server ' + (index + 1) + ':</strong> ' + (server.server || 'Unknown') + '<br>' +
-                            '<small>URL: ' + server.url + '</small>' +
+                            '<small>Type: ' + server.type + ' | URL: ' + server.url + '</small>' +
                             '</div>';
                             
                         playersHtml += '<div class="player-preview">' +
@@ -1856,6 +2287,7 @@ app.get('/admin', (req, res) => {
 
                 resultsDiv.innerHTML = '<div class="message success">' +
                     '<strong>Success!</strong><br>' +
+                    'Source: ' + (data.source || 'Unknown') + '<br>' +
                     'Used Pattern: ' + (data.usedPattern || 'Unknown') + '<br>' +
                     'URL: ' + data.url + '<br>' +
                     'Servers Found: ' + data.serverCount +
@@ -1866,7 +2298,8 @@ app.get('/admin', (req, res) => {
             } else {
                 resultsDiv.innerHTML = '<div class="message error">' +
                     '<strong>Failed!</strong><br>' +
-                    'Error: ' + data.error +
+                    'Error: ' + data.error + '<br>' +
+                    'Suggestion: ' + (data.suggestion || 'Try different parameters') +
                     '</div>';
                 playersDiv.innerHTML = '';
             }
@@ -1882,6 +2315,14 @@ app.get('/admin', (req, res) => {
                 switchTab('testPlayers');
                 setTimeout(() => testAnimeUrl(), 100);
             }
+        }
+
+        async function testMultiSource() {
+            document.getElementById('testSlug').value = 'one-piece';
+            document.getElementById('testSeason').value = '1';
+            document.getElementById('testEpisode').value = '1';
+            switchTab('testPlayers');
+            setTimeout(() => testAnimeUrl(), 100);
         }
 
         function quickTest() {
@@ -1918,7 +2359,7 @@ app.get('/admin', (req, res) => {
             const episode = document.getElementById('testEpisode').value || '1';
             
             document.getElementById('testUrlPreview').textContent = 
-                'Testing: /episode/' + slug + '-' + season + 'x' + episode + '/ and 7+ more patterns';
+                'Testing: /episode/' + slug + '-' + season + 'x' + episode + '/ and 15+ more patterns';
         }
 
         // Set up event listeners
@@ -1951,7 +2392,7 @@ async function startServer() {
   await loadDatabase();
   app.listen(PORT, () => {
     console.log(`
-ULTIMATE ANIMEWORLD API v7.0 - ENHANCED ACCURACY
+🎯 ULTIMATE ANIMEWORLD API v8.0 - ENHANCED MULTI-SOURCE
 ───────────────────────────────────────────
 Port: ${PORT}
 Database: ${Object.keys(animeDatabase).length} anime
@@ -1960,19 +2401,24 @@ API: http://localhost:${PORT}
 Admin: http://localhost:${PORT}/admin
 Password: admin123
 
-ENHANCED FEATURES:
-• Improved URL pattern detection (8+ patterns)
+🚀 ENHANCED FEATURES:
+• Multi-source scraping (watchanimeworld.in + animeworld-india.me)
+• Enhanced server detection (VidStream, EarnVids, Abyss, FileMoon, Streamwish, Voe)
+• Multi-season support with separate AniList IDs
+• Advanced pattern matching (16+ patterns)
 • Better iframe extraction with multiple attributes
-• Enhanced server detection
-• Responsive admin panel
-• Real-time analytics
-• Quick testing tools
+• Enhanced error handling and fallbacks
 
-ENDPOINTS:
+📊 ENDPOINTS:
 • /api/anime/:id/:season/:episode - Stream episodes
-• /api/random - Random content
+• /api/random - Random content  
 • /api/iframe?url=URL - Clean player
 • /health - Health check
+• /admin - Enhanced admin panel
+
+🔧 TESTING:
+Test your fixes with: /api/anime/21/1/1 (One Piece S1E1)
+Test multi-season: /api/anime/16498/4/1 (Attack on Titan Final Season)
 ───────────────────────────────────────────
     `);
   });

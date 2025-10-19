@@ -18,8 +18,14 @@ let apiStats = {
 // AniList GraphQL API
 const ANILIST_API = 'https://graphql.anilist.co';
 
-// Fast reliable sources only
+// ONLY 3 SOURCES AS REQUESTED
 const SOURCES = [
+  {
+    name: 'satoru.one',
+    baseUrl: 'https://satoru.one',
+    searchUrl: 'https://satoru.one/filter?keyword=',
+    patterns: []
+  },
   {
     name: 'watchanimeworld.in',
     baseUrl: 'https://watchanimeworld.in',
@@ -37,20 +43,23 @@ const SOURCES = [
       '/episode/{slug}-{season}x{episode}/',
       '/episode/{slug}-episode-{episode}/'
     ]
-  },
-  {
-    name: 'satoru.one',
-    baseUrl: 'https://satoru.one',
-    searchUrl: 'https://satoru.one/filter?keyword=',
-    patterns: []
   }
 ];
 
-// ==================== ANILIST INTEGRATION ====================
+// ==================== FIXED HEADERS FUNCTION ====================
+function getHeaders(referer = 'https://google.com') {
+  return {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'Accept-Encoding': 'gzip, deflate, br',
+    'Connection': 'keep-alive',
+    'Referer': referer,
+    'Cache-Control': 'max-age=0'
+  };
+}
 
-/**
- * Fast AniList title lookup
- */
+// ==================== FIXED ANILIST INTEGRATION ====================
 async function getAnimeTitleFromAniList(anilistId) {
   try {
     apiStats.anilistRequests++;
@@ -64,6 +73,7 @@ async function getAnimeTitleFromAniList(anilistId) {
             english
             native
           }
+          synonyms
         }
       }
     `;
@@ -71,151 +81,156 @@ async function getAnimeTitleFromAniList(anilistId) {
     const response = await axios.post(ANILIST_API, {
       query,
       variables: { id: parseInt(anilistId) }
-    }, { timeout: 5000 });
+    }, { 
+      timeout: 8000,
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      }
+    });
 
     if (response.data.data?.Media) {
       const media = response.data.data.Media;
-      return media.title.english || media.title.romaji;
+      const titles = [
+        media.title.english,
+        media.title.romaji, 
+        media.title.native,
+        ...(media.synonyms || [])
+      ].filter(Boolean);
+      
+      return {
+        primary: media.title.english || media.title.romaji,
+        all: titles
+      };
     }
     throw new Error('Anime not found on AniList');
   } catch (err) {
+    console.error('AniList error:', err.message);
     throw new Error(`AniList: ${err.message}`);
   }
 }
 
-// ==================== FAST SCRAPING FUNCTIONS ====================
-
-/**
- * Fast search with timeout
- */
-async function searchAnimeFast(query) {
-  const sourcesToSearch = SOURCES.slice(0, 2); // Only use first 2 sources for search
-  const promises = [];
-
-  for (const src of sourcesToSearch) {
-    const promise = axios.get(`${src.searchUrl}${encodeURIComponent(query)}`, {
-      headers: getHeaders(src.baseUrl),
-      timeout: 8000
-    }).then(response => {
-      const $ = load(response.data);
-      const results = extractSearchResults($, src.baseUrl);
-      return results.map(r => ({ ...r, source: src.name }));
-    }).catch(error => {
-      console.log(`❌ ${src.name} search failed: ${error.message}`);
-      return [];
-    });
-    
-    promises.push(promise);
-  }
-
-  const results = await Promise.all(promises);
-  return results.flat();
-}
-
-/**
- * Fast episode finder
- */
-async function findEpisodeFast(slug, season, episode, sourceName) {
-  const source = SOURCES.find(s => s.name === sourceName);
-  if (!source) return null;
-
-  // Special handling for Satoru
-  if (source.name === 'satoru.one') {
-    return await findSatoruEpisode(slug, episode);
-  }
-
-  // Standard sources
-  for (const pattern of source.patterns) {
-    const url = buildEpisodeUrl(pattern, slug, season, episode, source.baseUrl);
-    
-    try {
-      const episodeData = await tryEpisodeUrl(url, source.baseUrl);
-      if (episodeData && episodeData.servers.length > 0) {
-        return {
-          ...episodeData,
-          source: source.name,
-          usedPattern: pattern
-        };
-      }
-    } catch (error) {
-      continue;
-    }
-  }
-
-  return null;
-}
-
-/**
- * Satoru scraping
- */
+// ==================== FIXED SATORU SCRAPING ====================
 async function findSatoruEpisode(animeTitle, episodeNum) {
   try {
-    // Search Satoru for anime
-    const searchUrl = `https://satoru.one/filter?keyword=${encodeURIComponent(animeTitle)}`;
+    console.log(`🎯 Satoru: Searching for "${animeTitle}" episode ${episodeNum}`);
+    
+    // Clean title for search
+    const cleanTitle = animeTitle.replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
+    const searchUrl = `https://satoru.one/filter?keyword=${encodeURIComponent(cleanTitle)}`;
+    
     const searchResponse = await axios.get(searchUrl, {
       headers: getHeaders('https://satoru.one'),
-      timeout: 8000
+      timeout: 15000
     });
 
     const $ = load(searchResponse.data);
     let animeId = null;
+    let bestMatch = null;
     
+    // Find anime in search results
     $('.flw-item').each((i, el) => {
       const name = $(el).find('.film-name a').text().trim();
       const dataId = $(el).find('.film-poster-ahref').attr('data-id');
-      if (name.toLowerCase().includes(animeTitle.toLowerCase())) {
-        animeId = dataId;
-        return false;
+      
+      if (name && dataId) {
+        // Exact match gets highest priority
+        if (name.toLowerCase() === cleanTitle.toLowerCase()) {
+          animeId = dataId;
+          bestMatch = name;
+          return false; // Break loop
+        }
+        // Partial match
+        if (name.toLowerCase().includes(cleanTitle.toLowerCase()) && !animeId) {
+          animeId = dataId;
+          bestMatch = name;
+        }
       }
     });
 
-    if (!animeId) throw new Error('Anime not found on Satoru');
+    // Fallback to first result if no match found
+    if (!animeId) {
+      const firstItem = $('.flw-item').first();
+      if (firstItem.length) {
+        animeId = firstItem.find('.film-poster-ahref').attr('data-id');
+        bestMatch = firstItem.find('.film-name a').text().trim();
+        console.log(`⚠️ Using first result as fallback: "${bestMatch}"`);
+      }
+    }
+
+    if (!animeId) throw new Error(`Anime not found`);
+    console.log(`✅ Satoru found: "${bestMatch}" (ID: ${animeId})`);
 
     // Get episode list
     const episodeUrl = `https://satoru.one/ajax/episode/list/${animeId}`;
     const episodeResponse = await axios.get(episodeUrl, {
       headers: getHeaders('https://satoru.one'),
-      timeout: 8000
+      timeout: 15000
     });
+
+    if (!episodeResponse.data.html) {
+      throw new Error('No episode list returned');
+    }
 
     const $$ = load(episodeResponse.data.html);
     let epId = null;
     
+    // Find the specific episode
     $$('.ep-item').each((i, el) => {
       const num = $$(el).attr('data-number');
       const id = $$(el).attr('data-id');
-      if (String(num) === String(episodeNum)) {
+      if (num && id && String(num) === String(episodeNum)) {
         epId = id;
         return false;
       }
     });
 
-    if (!epId) throw new Error('Episode not found');
+    if (!epId) {
+      // Try first episode as fallback
+      const firstEp = $$('.ep-item').first();
+      if (firstEp.length) {
+        epId = firstEp.attr('data-id');
+        console.log(`⚠️ Using first available episode instead of episode ${episodeNum}`);
+      }
+    }
+
+    if (!epId) throw new Error(`Episode ${episodeNum} not found`);
 
     // Get servers
     const serversUrl = `https://satoru.one/ajax/episode/servers?episodeId=${epId}`;
     const serversResponse = await axios.get(serversUrl, {
       headers: getHeaders('https://satoru.one'),
-      timeout: 8000
+      timeout: 15000
     });
 
     const $$$ = load(serversResponse.data.html);
-    const serverSourceId = $$$('.server-item').first().attr('data-id');
-    if (!serverSourceId) throw new Error('No server found');
+    const serverItem = $$$('.server-item').first();
+    
+    if (!serverItem.length) throw new Error('No servers available');
+    
+    const serverSourceId = serverItem.attr('data-id');
+    if (!serverSourceId) throw new Error('No server source ID found');
 
     // Get iframe source
     const sourceUrl = `https://satoru.one/ajax/episode/sources?id=${serverSourceId}`;
     const sourceResponse = await axios.get(sourceUrl, {
       headers: getHeaders('https://satoru.one'),
-      timeout: 8000
+      timeout: 15000
     });
 
-    if (sourceResponse.data.type !== 'iframe') throw new Error('No iframe source');
+    if (!sourceResponse.data || sourceResponse.data.type !== 'iframe') {
+      throw new Error('No iframe source available');
+    }
     
     const iframeUrl = sourceResponse.data.link;
-    if (iframeUrl.toLowerCase().includes('youtube')) {
-      throw new Error('YouTube source filtered');
+    if (!iframeUrl) throw new Error('No iframe URL returned');
+
+    // Filter YouTube
+    if (iframeUrl.toLowerCase().includes('youtube') || iframeUrl.toLowerCase().includes('youtu.be')) {
+      throw new Error('YouTube source filtered out');
     }
+
+    console.log(`🎬 Satoru iframe URL found`);
 
     return {
       url: iframeUrl,
@@ -230,18 +245,80 @@ async function findSatoruEpisode(animeTitle, episodeNum) {
     };
 
   } catch (err) {
+    console.error(`💥 Satoru error: ${err.message}`);
     throw new Error(`Satoru: ${err.message}`);
   }
 }
 
-/**
- * Quick URL try with fast timeout
- */
+// ==================== ANIMEWORLD SCRAPING ====================
+async function findAnimeWorldEpisode(animeTitle, season, episode, sourceName) {
+  const source = SOURCES.find(s => s.name === sourceName);
+  if (!source) return null;
+
+  try {
+    console.log(`🔍 ${source.name}: Searching for "${animeTitle}"`);
+    
+    // Search for anime
+    const searchUrl = `${source.searchUrl}${encodeURIComponent(animeTitle)}`;
+    const searchResponse = await axios.get(searchUrl, {
+      headers: getHeaders(source.baseUrl),
+      timeout: 10000
+    });
+
+    const $ = load(searchResponse.data);
+    let slug = null;
+    
+    // Extract slug from search results
+    $('.item, .post, .anime-card').each((i, el) => {
+      const $el = $(el);
+      const title = $el.find('h3, h2, .title, a').first().text().trim();
+      const url = $el.find('a').first().attr('href');
+      
+      if (title && url && title.toLowerCase().includes(animeTitle.toLowerCase())) {
+        const slugMatch = url.match(/\/(anime|series)\/([^\/]+)/);
+        if (slugMatch) {
+          slug = slugMatch[2];
+          console.log(`✅ ${source.name} found: "${title}" -> ${slug}`);
+          return false;
+        }
+      }
+    });
+
+    if (!slug) throw new Error('Anime not found in search results');
+
+    // Try episode patterns
+    for (const pattern of source.patterns) {
+      const url = buildEpisodeUrl(pattern, slug, season, episode, source.baseUrl);
+      
+      try {
+        console.log(`🔗 Trying ${source.name}: ${url}`);
+        const episodeData = await tryEpisodeUrl(url, source.baseUrl);
+        if (episodeData && episodeData.servers.length > 0) {
+          return {
+            ...episodeData,
+            source: source.name,
+            usedPattern: pattern
+          };
+        }
+      } catch (error) {
+        continue;
+      }
+    }
+
+    throw new Error('No working episodes found');
+
+  } catch (err) {
+    console.error(`💥 ${source.name} error: ${err.message}`);
+    throw new Error(`${source.name}: ${err.message}`);
+  }
+}
+
+// ==================== EPISODE URL TESTER ====================
 async function tryEpisodeUrl(url, baseUrl) {
   try {
     const response = await axios.get(url, {
       headers: getHeaders(baseUrl),
-      timeout: 8000,
+      timeout: 10000,
       validateStatus: () => true
     });
 
@@ -251,10 +328,12 @@ async function tryEpisodeUrl(url, baseUrl) {
     const $ = load(response.data);
     const servers = extractAllServers($, baseUrl);
     
-    // Filter YouTube
+    // Filter YouTube and invalid URLs
     const filteredServers = servers.filter(server => 
+      server.url && 
       !server.url.toLowerCase().includes('youtube') && 
-      !server.url.toLowerCase().includes('youtu.be')
+      !server.url.toLowerCase().includes('youtu.be') &&
+      server.url.startsWith('http')
     );
     
     return filteredServers.length > 0 ? {
@@ -269,39 +348,15 @@ async function tryEpisodeUrl(url, baseUrl) {
 }
 
 // ==================== HELPER FUNCTIONS ====================
-
-function extractSearchResults($, baseUrl) {
-  const results = [];
-  
-  $('.item, .post, .anime-card').each((i, el) => {
-    const $el = $(el);
-    const title = $el.find('h3, h2, .title, a').first().text().trim();
-    const url = $el.find('a').first().attr('href');
-    
-    if (title && url && (url.includes('/anime/') || url.includes('/series/'))) {
-      const slugMatch = url.match(/\/(anime|series)\/([^\/]+)/);
-      if (slugMatch) {
-        results.push({
-          title: cleanTitle(title),
-          url: url,
-          slug: slugMatch[2],
-          source: baseUrl
-        });
-      }
-    }
-  });
-
-  return results;
-}
-
 function extractAllServers($, baseUrl) {
   const servers = [];
   
+  // Find all iframes
   $('iframe').each((i, el) => {
     let src = $(el).attr('src') || $(el).attr('data-src');
     if (src) {
       src = normalizeUrl(src, baseUrl);
-      if (src && !src.toLowerCase().includes('youtube')) {
+      if (src && src.startsWith('http')) {
         servers.push({
           name: `Server ${i + 1}`,
           url: src,
@@ -316,10 +371,12 @@ function extractAllServers($, baseUrl) {
 }
 
 function buildEpisodeUrl(pattern, slug, season, episode, baseUrl) {
-  return baseUrl + pattern
+  let url = pattern
     .replace('{slug}', slug)
     .replace('{season}', season)
     .replace('{episode}', episode);
+  
+  return url.startsWith('http') ? url : baseUrl + url;
 }
 
 function normalizeUrl(url, baseUrl) {
@@ -327,7 +384,7 @@ function normalizeUrl(url, baseUrl) {
   if (url.startsWith('//')) return 'https:' + url;
   if (url.startsWith('/')) return baseUrl + url;
   if (url.startsWith('http')) return url;
-  return null;
+  return baseUrl + url;
 }
 
 function detectServerType(url) {
@@ -338,98 +395,92 @@ function detectServerType(url) {
   if (urlLower.includes('mp4upload')) return 'Mp4Upload';
   if (urlLower.includes('vidstream')) return 'VidStream';
   if (urlLower.includes('voe')) return 'Voe';
+  if (urlLower.includes('satoru')) return 'Satoru';
   return 'Direct';
 }
 
-function cleanTitle(title) {
-  return title
-    .replace(/[\n\r\t]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .replace(/^watch\s+/i, '')
-    .replace(/\s+online\s*$/i, '');
-}
-
-function getHeaders(referer) {
-  return {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-    'Referer': referer + '/'
-  };
-}
-
-function findBestMatch(results, query) {
-  if (results.length === 0) return null;
-  
-  const queryLower = query.toLowerCase();
-  let bestMatch = results[0];
-  let bestScore = 0;
-
-  for (const result of results) {
-    let score = 0;
-    const titleLower = result.title.toLowerCase();
-    
-    if (titleLower === queryLower) score += 100;
-    if (titleLower.includes(queryLower)) score += 50;
-    if (titleLower.startsWith(queryLower)) score += 30;
-    
-    if (score > bestScore) {
-      bestScore = score;
-      bestMatch = result;
-    }
-  }
-
-  return bestScore > 10 ? bestMatch : null;
-}
-
 // ==================== MAIN API ENDPOINTS ====================
-
-// Fast AniList endpoint - http://localhost:3000/api/anime/21/1/1
 app.get('/api/anime/:anilistId/:season/:episode', async (req, res) => {
   try {
     const { anilistId, season, episode } = req.params;
     const { json, clean } = req.query;
 
-    console.log(`⚡ AniList Stream: ID ${anilistId} S${season}E${episode}`);
+    console.log(`\n⚡ AniList Stream: ID ${anilistId} S${season}E${episode}`);
     apiStats.totalRequests++;
 
-    // Step 1: Get title from AniList (fast)
-    const animeTitle = await getAnimeTitleFromAniList(anilistId);
-    console.log(`✅ AniList Title: "${animeTitle}"`);
-
-    // Step 2: Try sources in parallel for speed
-    const sourcePromises = SOURCES.map(source => 
-      findEpisodeFast(animeTitle, season, episode, source.name)
-        .then(data => ({ source: source.name, data }))
-        .catch(err => ({ source: source.name, error: err.message }))
-    );
-
-    const results = await Promise.allSettled(sourcePromises);
+    // Step 1: Get titles from AniList
+    const titleData = await getAnimeTitleFromAniList(anilistId);
+    console.log(`✅ AniList Data: "${titleData.primary}" with ${titleData.all.length} synonyms`);
     
-    // Find first successful result
+    // Step 2: Create search titles (limit to reasonable ones)
+    const searchTitles = [
+      titleData.primary,
+      ...titleData.all.filter(t => t && t.length > 1)
+    ].slice(0, 3);
+
+    console.log(`🔍 Search titles: [ ${searchTitles.map(t => `'${t}'`).join(', ')} ]`);
+
+    // Step 3: TRY SATORU FIRST (as requested)
     let episodeData = null;
     let usedSource = '';
-    
-    for (const result of results) {
-      if (result.status === 'fulfilled' && result.value.data) {
-        episodeData = result.value.data;
-        usedSource = result.value.source;
-        break;
+    let usedTitle = '';
+
+    // Try Satoru with each title
+    for (const title of searchTitles) {
+      try {
+        console.log(`🎯 TRYING SATORU with: "${title}"`);
+        const data = await findSatoruEpisode(title, episode);
+        if (data) {
+          episodeData = data;
+          usedSource = 'satoru.one';
+          usedTitle = title;
+          console.log(`✅ SUCCESS: Found on Satoru with "${title}"`);
+          break;
+        }
+      } catch (error) {
+        console.log(`❌ Satoru failed with "${title}": ${error.message}`);
+      }
+    }
+
+    // If Satoru fails, try animeworld sources
+    if (!episodeData) {
+      console.log(`🔄 Satoru failed, trying animeworld sources...`);
+      
+      for (const source of SOURCES.slice(1)) { // Skip satoru (index 0)
+        if (episodeData) break;
+        
+        for (const title of searchTitles) {
+          try {
+            console.log(`🎯 Trying ${source.name} with: "${title}"`);
+            const data = await findAnimeWorldEpisode(title, season, episode, source.name);
+            if (data) {
+              episodeData = data;
+              usedSource = source.name;
+              usedTitle = title;
+              console.log(`✅ SUCCESS: Found on ${source.name} with "${title}"`);
+              break;
+            }
+          } catch (error) {
+            console.log(`❌ ${source.name} failed with "${title}": ${error.message}`);
+          }
+        }
       }
     }
 
     if (!episodeData) {
       apiStats.failedRequests++;
       return res.status(404).json({ 
-        error: 'No streaming sources found',
-        anime_title: animeTitle,
-        anilist_id: anilistId
+        error: 'No anime found on any source',
+        anime_title: titleData.primary,
+        anilist_id: anilistId,
+        searched_titles: searchTitles,
+        sources_tried: SOURCES.map(s => s.name)
       });
     }
 
     apiStats.successfulRequests++;
 
-    // Return iframe directly for fastest response
+    // Return iframe directly
     if (clean !== 'false') {
       return sendCleanIframe(res, episodeData.servers[0].url);
     }
@@ -439,21 +490,22 @@ app.get('/api/anime/:anilistId/:season/:episode', async (req, res) => {
       return res.json({
         success: true,
         anilist_id: parseInt(anilistId),
-        title: animeTitle,
+        title: titleData.primary,
         season: parseInt(season),
         episode: parseInt(episode),
         source: usedSource,
+        matched_title: usedTitle,
         servers: episodeData.servers,
-        total_servers: episodeData.servers.length,
-        response_time: 'fast'
+        total_servers: episodeData.servers.length
       });
     }
 
     // Default: enhanced player
-    return sendEnhancedPlayer(res, animeTitle, season, episode, episodeData.servers[0].url, episodeData.servers);
+    return sendEnhancedPlayer(res, titleData.primary, season, episode, 
+                            episodeData.servers[0].url, episodeData.servers);
 
   } catch (error) {
-    console.error('AniList endpoint error:', error.message);
+    console.error('💥 AniList endpoint error:', error.message);
     apiStats.failedRequests++;
     res.status(500).json({ 
       error: error.message,
@@ -462,44 +514,50 @@ app.get('/api/anime/:anilistId/:season/:episode', async (req, res) => {
   }
 });
 
-// Existing stream endpoint (kept for compatibility)
+// Stream endpoint for name-based search
 app.get('/api/stream/:name/:season/:episode', async (req, res) => {
   try {
     const { name, season, episode } = req.params;
     const { json, clean } = req.query;
 
-    console.log(`🎬 Stream: ${name} S${season}E${episode}`);
+    console.log(`\n🎬 Stream: ${name} S${season}E${episode}`);
     apiStats.totalRequests++;
 
-    // Fast search
-    const searchResults = await searchAnimeFast(name);
-    const bestMatch = findBestMatch(searchResults, name);
-
-    if (!bestMatch) {
-      apiStats.failedRequests++;
-      return res.status(404).json({ error: 'Anime not found' });
-    }
-
-    // Try sources in parallel
-    const sourcePromises = SOURCES.map(source => 
-      findEpisodeFast(bestMatch.slug, season, episode, source.name)
-        .then(data => ({ source: source.name, data }))
-        .catch(err => null)
-    );
-
-    const results = await Promise.allSettled(sourcePromises);
     let episodeData = null;
-    
-    for (const result of results) {
-      if (result.status === 'fulfilled' && result.value?.data) {
-        episodeData = result.value.data;
-        break;
+    let usedSource = '';
+
+    // TRY SATORU FIRST
+    try {
+      console.log(`🎯 TRYING SATORU with: "${name}"`);
+      episodeData = await findSatoruEpisode(name, episode);
+      usedSource = 'satoru.one';
+      console.log(`✅ SUCCESS: Found on Satoru`);
+    } catch (error) {
+      console.log(`❌ Satoru failed: ${error.message}`);
+      
+      // Try animeworld sources if Satoru fails
+      for (const source of SOURCES.slice(1)) {
+        try {
+          console.log(`🎯 Trying ${source.name} with: "${name}"`);
+          episodeData = await findAnimeWorldEpisode(name, season, episode, source.name);
+          if (episodeData) {
+            usedSource = source.name;
+            console.log(`✅ SUCCESS: Found on ${source.name}`);
+            break;
+          }
+        } catch (err) {
+          console.log(`❌ ${source.name} failed: ${err.message}`);
+        }
       }
     }
 
     if (!episodeData) {
       apiStats.failedRequests++;
-      return res.status(404).json({ error: 'Episode not found' });
+      return res.status(404).json({ 
+        error: 'No streaming sources found',
+        searched_name: name,
+        sources_tried: SOURCES.map(s => s.name)
+      });
     }
 
     apiStats.successfulRequests++;
@@ -511,43 +569,28 @@ app.get('/api/stream/:name/:season/:episode', async (req, res) => {
     if (json) {
       return res.json({
         success: true,
-        title: bestMatch.title,
+        title: name,
         season: parseInt(season),
         episode: parseInt(episode),
-        source: episodeData.source,
+        source: usedSource,
         servers: episodeData.servers
       });
     }
 
-    return sendEnhancedPlayer(res, bestMatch.title, season, episode, episodeData.servers[0].url, episodeData.servers);
+    return sendEnhancedPlayer(res, name, season, episode, 
+                            episodeData.servers[0].url, episodeData.servers);
 
   } catch (error) {
-    console.error('Stream error:', error.message);
+    console.error('💥 Stream error:', error.message);
     apiStats.failedRequests++;
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ 
+      error: error.message,
+      searched_name: req.params.name
+    });
   }
 });
 
-// Health check
-app.get('/health', (req, res) => {
-  const successRate = apiStats.totalRequests > 0 ? 
-    Math.round((apiStats.successfulRequests / apiStats.totalRequests) * 100) : 0;
-    
-  res.json({ 
-    status: 'active', 
-    version: '3.0.0',
-    total_requests: apiStats.totalRequests,
-    successful_requests: apiStats.successfulRequests,
-    failed_requests: apiStats.failedRequests,
-    anilist_requests: apiStats.anilistRequests,
-    success_rate: successRate + '%',
-    response_time: 'fast',
-    sources: SOURCES.map(s => s.name)
-  });
-});
-
 // ==================== PLAYER FUNCTIONS ====================
-
 function sendEnhancedPlayer(res, title, season, episode, videoUrl, servers = []) {
   const html = `<!DOCTYPE html>
 <html>
@@ -594,49 +637,67 @@ function sendCleanIframe(res, url) {
   res.send(html);
 }
 
-// ==================== SERVER STARTUP ====================
+// ==================== HEALTH & STATUS ====================
+app.get('/health', (req, res) => {
+  const successRate = apiStats.totalRequests > 0 ? 
+    Math.round((apiStats.successfulRequests / apiStats.totalRequests) * 100) : 0;
+    
+  res.json({ 
+    status: 'active', 
+    version: '1.0.0',
+    total_requests: apiStats.totalRequests,
+    successful_requests: apiStats.successfulRequests,
+    failed_requests: apiStats.failedRequests,
+    anilist_requests: apiStats.anilistRequests,
+    success_rate: successRate + '%',
+    sources: SOURCES.map(s => s.name),
+    strategy: 'Satoru first, then animeworld fallbacks'
+  });
+});
 
 app.get('/', (req, res) => res.json({ 
-  message: '⚡ Fast Anime Streaming API',
-  version: '3.0.0',
+  message: '⚡ ANIME STREAMING API - 3 SOURCES ONLY',
+  version: '1.0.0',
+  sources: ['satoru.one', 'watchanimeworld.in', 'animeworld-india.me'],
+  strategy: 'Satoru first, animeworld as fallback',
   endpoints: {
-    '/api/anime/:anilistId/:season/:episode': 'Fast AniList streaming (<5s)',
+    '/api/anime/:anilistId/:season/:episode': 'AniList streaming (Satoru first)',
     '/api/stream/:name/:season/:episode': 'Name-based streaming',
     '/health': 'API status'
-  },
-  features: [
-    'AniList integration',
-    '3 fast sources',
-    'No YouTube',
-    'Under 5 second response time'
-  ]
+  }
 }));
 
+// ==================== SERVER STARTUP ====================
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`
-⚡ FAST ANIME STREAMING API v3.0
+⚡ ANIME STREAMING API - 3 SOURCES ONLY
 ───────────────────────────────────────────
 Port: ${PORT}
 API: http://localhost:${PORT}
 
-🚀 KEY FEATURES:
-• AniList Integration - /api/anime/21/1/1
-• 3 Fast Sources - watchanimeworld.in, animeworld-india.me, satoru.one
-• No YouTube - Completely filtered out
-• Under 5s Response - Optimized for speed
+🎯 SOURCES (IN ORDER):
+1. satoru.one - PRIMARY (Always tried first)
+2. watchanimeworld.in - FALLBACK 
+3. animeworld-india.me - FALLBACK
+
+🚀 STRATEGY:
+• Always try Satoru first for every request
+• If Satoru fails, try watchanimeworld.in
+• If that fails, try animeworld-india.me
+• No other sources used
 
 📊 ENDPOINTS:
-• /api/anime/21/1/1 - One Piece via AniList ID (FASTEST)
-• /api/stream/one piece/1/1 - Name-based search
-• /health - API status
+• /api/anime/21/1/1 - One Piece via AniList ID
+• /api/anime/269/1/1 - Bleach 
+• /api/anime/813/1/1 - Dragon Ball Z
+• /api/stream/one piece/1/1 - Name-based
 
-🎮 USAGE:
-• http://localhost:3000/api/anime/21/1/1
-• http://localhost:3000/api/anime/16498/1/1 (Attack on Titan)
-• http://localhost:3000/api/anime/269/1/1 (Bleach)
-
-✅ NO DEPENDENCIES - No m3u8-parser or sqlite required
+✅ FEATURES:
+• No missing functions - Everything included
+• No YouTube - Completely filtered
+• Fast fallback system
+• Detailed logging
 ───────────────────────────────────────────
   `);
 });

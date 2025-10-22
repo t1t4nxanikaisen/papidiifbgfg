@@ -1,6 +1,6 @@
-import express from 'express';
-import axios from 'axios';
-import { load } from 'cheerio';
+const express = require('express');
+const axios = require('axios');
+const { load } = require('cheerio');
 
 const app = express();
 app.use(express.json());
@@ -901,3 +901,4 @@ API: http://localhost:${PORT}
 ✅ GUARANTEED: Under 5-second response times
 ───────────────────────────────────────────
   `);
+});
